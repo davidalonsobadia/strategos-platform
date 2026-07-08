@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/nemi_db"
+    DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/strategos_db"
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # App environment (align with client-portal APP_ENV)
