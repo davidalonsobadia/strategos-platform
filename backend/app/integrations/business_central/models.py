@@ -85,6 +85,9 @@ class BCProject(BaseModel):
     entity_type: str
     responsible: str
     technician: str
+    has_certificate: bool
+    certificate_expiry: date | None = None
+    filing_date: date | None = None
     status: ProjectStatus
 
 
