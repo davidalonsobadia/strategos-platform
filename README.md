@@ -1,4 +1,4 @@
-# TaskFlow - Full Stack Application
+# Strategos - Full Stack Application
 
 A modern task management application with FastAPI backend and Next.js frontend, fully containerized with Docker.
 
@@ -22,7 +22,7 @@ A modern task management application with FastAPI backend and Next.js frontend, 
 
 ```bash
 git clone <repository-url>
-cd craze_dashboard
+cd strategos-platform
 ```
 
 ### 2. Set Up Environment Variables
@@ -95,7 +95,7 @@ docker-compose restart frontend
 ## 📁 Project Structure
 
 ```
-craze_dashboard/
+strategos-platform/
 ├── backend/              # FastAPI backend
 │   ├── app/              # Application code
 │   ├── alembic/         # Database migrations
@@ -158,7 +158,7 @@ docker-compose exec frontend pnpm install
 docker-compose exec api python scripts/create_api_client.py --name "test"
 
 # Access database
-docker-compose exec db psql -U postgres -d taskflow_db
+docker-compose exec db psql -U postgres -d strategos_db
 
 # Run migrations
 docker-compose exec api alembic upgrade head

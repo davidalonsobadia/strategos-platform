@@ -1,4 +1,4 @@
-# TaskFlow Backend
+# Strategos Backend
 
 A clean, production-ready FastAPI backend starter template with authentication, user management, and task lists.
 
@@ -21,8 +21,8 @@ A clean, production-ready FastAPI backend starter template with authentication, 
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/taskflow-backend.git
-cd taskflow-backend
+git clone https://github.com/yourusername/strategos-backend.git
+cd strategos-backend
 
 # Copy environment file
 cp .env.example .env
@@ -119,7 +119,7 @@ RESEND_FROM_EMAIL=noreply@yourdomain.com
 FRONTEND_URL=http://localhost:3000
 
 # Database
-DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/taskflow_db
+DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/strategos_db
 
 # Redis
 REDIS_URL=redis://redis:6379/0
@@ -223,7 +223,7 @@ docker-compose exec api alembic upgrade head
 docker-compose exec api python scripts/create_api_client.py --name "my-client"
 
 # Access database
-docker-compose exec db psql -U postgres -d taskflow_db
+docker-compose exec db psql -U postgres -d strategos_db
 ```
 
 ---
@@ -231,7 +231,7 @@ docker-compose exec db psql -U postgres -d taskflow_db
 ## 📁 Project Structure
 
 ```
-taskflow-backend/
+strategos-backend/
 ├── app/
 │   ├── api/              # API routes
 │   ├── core/             # Core utilities (config, email, etc.)
@@ -308,7 +308,7 @@ docker-compose logs -f worker
 Or manually verify in database:
 
 ```bash
-docker-compose exec db psql -U postgres -d taskflow_db -c \
+docker-compose exec db psql -U postgres -d strategos_db -c \
   "UPDATE users SET is_verified = true WHERE email = 'user@example.com';"
 ```
 
