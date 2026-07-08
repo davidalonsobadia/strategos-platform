@@ -1,12 +1,12 @@
 [
-  { "id": "obl-ccaa", "name": "Dipòsit de comptes (CCAA)", "periodicity": "anual" },
-  { "id": "obl-is", "name": "IS", "periodicity": "anual" },
-  { "id": "obl-irpf", "name": "IRPF", "periodicity": "trimestral" },
-  { "id": "obl-igi", "name": "IGI", "periodicity": "trimestral" },
-  { "id": "obl-irnr", "name": "IRNR", "periodicity": "trimestral" },
-  { "id": "obl-bon-iiea", "name": "Bonificació IIEA", "periodicity": "anual" },
-  { "id": "obl-bon-itp", "name": "Bonificació ITP/IGI", "periodicity": "anual" },
-  { "id": "obl-cass", "name": "Treballador per compte propi (CASS)", "periodicity": "mensual" },
-  { "id": "obl-factures", "name": "Generació de factures", "periodicity": "mensual" },
-  { "id": "obl-informes", "name": "Generació d'informes", "periodicity": "mensual" }
+  { "id": "obl-ccaa", "code": "CCAA", "name": "Dipòsit de comptes (CCAA)", "periodicity": "anual", "due_date_rule": "Dins dels 7 mesos posteriors al tancament de l'exercici" },
+  { "id": "obl-is", "code": "IS", "name": "IS", "periodicity": "anual", "due_date_rule": "Dins dels 7 mesos posteriors al tancament de l'exercici" },
+  { "id": "obl-irpf", "code": "IRPF", "name": "IRPF", "periodicity": "trimestral", "due_date_rule": "Dins del mes següent al tancament de cada trimestre" },
+  { "id": "obl-igi", "code": "IGI", "name": "IGI", "periodicity": "trimestral", "due_date_rule": "Dins del mes següent al tancament de cada trimestre" },
+  { "id": "obl-irnr", "code": "IRNR", "name": "IRNR", "periodicity": "trimestral", "due_date_rule": "Dins del mes següent al tancament de cada trimestre" },
+  { "id": "obl-bon-iiea", "code": "BON-IIEA", "name": "Bonificació IIEA", "periodicity": "anual", "due_date_rule": "Presentació anual" },
+  { "id": "obl-bon-itp", "code": "BON-ITP", "name": "Bonificació ITP/IGI", "periodicity": "anual", "due_date_rule": "Presentació anual" },
+  { "id": "obl-cass", "code": "CASS", "name": "Treballador per compte propi (CASS)", "periodicity": "mensual", "due_date_rule": "Últim dia hàbil del mes següent" },
+  { "id": "obl-factures", "code": "FACTURES", "name": "Generació de factures", "periodicity": "mensual", "due_date_rule": "Mensual" },
+  { "id": "obl-informes", "code": "INFORMES", "name": "Generació d'informes", "periodicity": "mensual", "due_date_rule": "Mensual" }
 ]
