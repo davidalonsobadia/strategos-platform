@@ -1,49 +1,24 @@
-// Tasks feature API client
-import type { Task } from "@/lib/types"
+// Tasks feature API client (client-side).
+// Calls the Next.js route handler under /api/tasks — never the backend directly.
+import type { Task, TaskStatus } from "@/lib/types"
+
+export interface GetTasksParams {
+  status?: TaskStatus
+  projectId?: string
+  assigneeId?: string
+}
 
 export const tasksApi = {
-  async getTasks(listId: string): Promise<{ success: boolean; data?: Task[] }> {
-    const response = await fetch(`/api/tasks?listId=${listId}`)
-    return response.json()
-  },
+  async getTasks(
+    params: GetTasksParams = {},
+  ): Promise<{ success: boolean; data?: Task[]; message?: string }> {
+    const query = new URLSearchParams()
+    if (params.status) query.set("status", params.status)
+    if (params.projectId) query.set("project_id", params.projectId)
+    if (params.assigneeId) query.set("assignee_id", params.assigneeId)
+    const queryString = query.toString()
 
-  async createTask(data: {
-    listId: string
-    title: string
-    description?: string
-    priority?: "low" | "medium" | "high"
-    dueDate?: string
-  }) {
-    const response = await fetch("/api/tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    })
-    return response.json()
-  },
-
-  async updateTask(
-    id: string,
-    data: {
-      title?: string
-      description?: string
-      completed?: boolean
-      priority?: "low" | "medium" | "high"
-      dueDate?: string
-    },
-  ) {
-    const response = await fetch(`/api/tasks/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    })
-    return response.json()
-  },
-
-  async deleteTask(id: string) {
-    const response = await fetch(`/api/tasks/${id}`, {
-      method: "DELETE",
-    })
+    const response = await fetch(`/api/tasks${queryString ? `?${queryString}` : ""}`)
     return response.json()
   },
 }
