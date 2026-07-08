@@ -116,15 +116,26 @@ class BCObligation(BaseModel):
     """A catalog obligation type (BC ``GET /obligations``)."""
 
     id: str
+    code: str
     name: str
     periodicity: Periodicity
+    due_date_rule: str
 
 
 class BCProjectObligation(BaseModel):
-    """An obligation instance for a project (BC ``GET /projectObligations``)."""
+    """An obligation instance for a project (BC ``GET /projectObligations``).
+
+    ``subject`` is the *subjecte* SI/NO flag (whether the project is liable for
+    this obligation). ``submission_date`` is null until the obligation is filed.
+    The BC ``status`` field is the system-of-record label; Strategos re-derives
+    its own due state from ``due_date``/``submission_date`` against a reference
+    date in the obligations domain.
+    """
 
     id: str
     project_id: str
     obligation_id: str
+    subject: bool
     due_date: date
+    submission_date: date | None = None
     status: ObligationStatus
