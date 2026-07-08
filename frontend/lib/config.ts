@@ -36,6 +36,9 @@ export const config = {
         users: {
           base: "/api/v1/users",
         },
+        dashboard: {
+          summary: "/api/v1/dashboard/summary",
+        },
       },
       // Frontend API routes (proxy to backend)
       auth: {
@@ -61,6 +64,9 @@ export const config = {
       },
       users: {
         base: "/api/users",
+      },
+      dashboard: {
+        summary: "/api/dashboard",
       },
     },
   },
