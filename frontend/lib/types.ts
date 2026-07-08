@@ -162,6 +162,48 @@ export interface UserDirectoryEntry {
   activeTasks: number
 }
 
+// Dashboard summary. The landing screen is a pure aggregation view: the four KPI
+// tiles plus the "Próximas obligaciones" and "Mis tareas de hoy" lists all come
+// from a single GET /api/v1/dashboard/summary (see the dashboard domain).
+
+// A KPI tile showing how many of a total are currently active.
+export interface ActiveTotalKpi {
+  active: number
+  total: number
+}
+
+// A KPI tile showing how many of a total are still pending (not done).
+export interface PendingTotalKpi {
+  pending: number
+  total: number
+}
+
+// A KPI tile that is a single count (obligations due within the window).
+export interface CountKpi {
+  count: number
+}
+
+// Backend API response type (from GET /api/v1/dashboard/summary). The two lists
+// reuse the obligations / tasks response shapes.
+export interface DashboardSummaryResponse {
+  proyectos_activos: ActiveTotalKpi
+  obligaciones_proximas: CountKpi
+  tareas_pendientes: PendingTotalKpi
+  clientes_activos: ActiveTotalKpi
+  proximas_obligaciones: ProjectObligationResponse[]
+  mis_tareas_de_hoy: TaskResponse[]
+}
+
+// Frontend type (camelCase for easier use in components)
+export interface DashboardSummary {
+  proyectosActivos: ActiveTotalKpi
+  obligacionesProximas: CountKpi
+  tareasPendientes: PendingTotalKpi
+  clientesActivos: ActiveTotalKpi
+  proximasObligaciones: ProjectObligation[]
+  misTareasDeHoy: Task[]
+}
+
 export interface AuthResponse {
   success: boolean
   message?: string
@@ -239,5 +281,20 @@ export function transformTaskResponse(backendTask: TaskResponse): Task {
     priority: backendTask.priority,
     status: backendTask.status,
     dueDate: backendTask.due_date,
+  }
+}
+
+export function transformDashboardSummaryResponse(
+  backendSummary: DashboardSummaryResponse,
+): DashboardSummary {
+  return {
+    proyectosActivos: backendSummary.proyectos_activos,
+    obligacionesProximas: backendSummary.obligaciones_proximas,
+    tareasPendientes: backendSummary.tareas_pendientes,
+    clientesActivos: backendSummary.clientes_activos,
+    proximasObligaciones: backendSummary.proximas_obligaciones.map(
+      transformProjectObligationResponse,
+    ),
+    misTareasDeHoy: backendSummary.mis_tareas_de_hoy.map(transformTaskResponse),
   }
 }
