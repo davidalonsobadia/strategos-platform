@@ -19,13 +19,8 @@ export const config = {
           resetPassword: "/api/v1/auth/reset-password",
           me: "/api/v1/auth/me",
         },
-        lists: {
-          base: "/api/v1/lists",
-          byId: (id: string) => `/api/v1/lists/${id}`,
-        },
         tasks: {
           base: "/api/v1/tasks",
-          byId: (id: string) => `/api/v1/tasks/${id}`,
         },
         customers: {
           base: "/api/v1/customers",
@@ -49,13 +44,8 @@ export const config = {
         resetPassword: "/api/auth/reset-password",
         me: "/api/auth/me",
       },
-      lists: {
-        base: "/api/lists",
-        byId: (id: string) => `/api/lists/${id}`,
-      },
       tasks: {
         base: "/api/tasks",
-        byId: (id: string) => `/api/tasks/${id}`,
       },
       customers: {
         base: "/api/customers",
@@ -75,7 +65,5 @@ export const config = {
     verifyEmail: "/verify-email",
     forgotPassword: "/forgot-password",
     resetPassword: "/reset-password",
-    lists: "/lists",
-    listDetail: (id: string) => `/lists/${id}`,
   },
 } as const

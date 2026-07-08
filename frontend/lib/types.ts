@@ -12,56 +12,37 @@ export interface User {
   createdAt: string
 }
 
-// Backend API response types (snake_case)
-export interface ListResponse {
-  id: number
-  user_id: number
-  name: string
-  description?: string | null
-  color: string
-  task_count?: number
-  completed_count?: number
-  created_at: string
-  updated_at: string
-}
+// Task priority / status match the Business Central vocabulary the backend
+// returns. Status names are the board columns rendered on the Tareas page.
+export type TaskPriority = "Alta" | "Media" | "Baja"
+export type TaskStatus = "Pendiente" | "En curso" | "Hecho"
 
-// Frontend types (camelCase for easier use in components)
-export interface List {
+interface TaskEntityRef {
   id: string
-  userId: string
-  title: string
-  description?: string
-  color: string
-  taskCount?: number
-  completedCount?: number
-  createdAt: string
-  updatedAt: string
+  name: string
 }
 
-// Backend API response types (snake_case)
+// Backend API response type (from GET /api/v1/tasks). Tasks are sourced
+// read-only from Business Central, so there are no local mutable columns.
 export interface TaskResponse {
-  id: number
-  list_id: number
+  id: string
   title: string
-  description?: string | null
-  completed: boolean
-  priority: "low" | "medium" | "high"
-  due_date?: string | null
-  created_at: string
-  updated_at: string
+  project: TaskEntityRef
+  assignee: TaskEntityRef
+  priority: TaskPriority
+  status: TaskStatus
+  due_date: string
 }
 
-// Frontend types (camelCase for easier use in components)
+// Frontend type (camelCase for easier use in components)
 export interface Task {
   id: string
-  listId: string
   title: string
-  description?: string
-  completed: boolean
-  priority: "low" | "medium" | "high"
-  dueDate?: string
-  createdAt: string
-  updatedAt: string
+  project: TaskEntityRef
+  assignee: TaskEntityRef
+  priority: TaskPriority
+  status: TaskStatus
+  dueDate: string
 }
 
 // Customer status matches the Business Central vocabulary the backend returns.
@@ -177,20 +158,6 @@ export interface ApiResponse<T = any> {
 }
 
 // Transformation utilities to convert between backend and frontend types
-export function transformListResponse(backendList: ListResponse): List {
-  return {
-    id: String(backendList.id),
-    userId: String(backendList.user_id),
-    title: backendList.name,
-    description: backendList.description || undefined,
-    color: backendList.color,
-    taskCount: backendList.task_count,
-    completedCount: backendList.completed_count,
-    createdAt: backendList.created_at,
-    updatedAt: backendList.updated_at,
-  }
-}
-
 export function transformCustomerResponse(backendCustomer: CustomerResponse): Customer {
   return {
     name: backendCustomer.name,
@@ -235,14 +202,12 @@ export function transformProjectObligationResponse(
 
 export function transformTaskResponse(backendTask: TaskResponse): Task {
   return {
-    id: String(backendTask.id),
-    listId: String(backendTask.list_id),
+    id: backendTask.id,
     title: backendTask.title,
-    description: backendTask.description || undefined,
-    completed: backendTask.completed,
+    project: backendTask.project,
+    assignee: backendTask.assignee,
     priority: backendTask.priority,
-    dueDate: backendTask.due_date || undefined,
-    createdAt: backendTask.created_at,
-    updatedAt: backendTask.updated_at,
+    status: backendTask.status,
+    dueDate: backendTask.due_date,
   }
 }
