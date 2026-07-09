@@ -1,22 +1,22 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Producción — stack AUTOCONTENIDO (NO es un override de docker-compose.yml).
+# Production — SELF-CONTAINED stack (NOT an override of docker-compose.yml).
 #
-# Diferencias con docker-compose.yml (dev):
-#   - Usa imágenes prebuilt de GHCR (no hace build:).
-#   - No monta el código fuente (la imagen es self-contained).
-#   - NO publica puertos al host. Strategos trae su PROPIO Caddy interno
-#     (strategos-caddy, sin puertos): el Caddy/ingress EXTERNO del VPS (dueño del
-#     80/443, repo Koalvia/infra) le pasa el dominio por la red externa "proxy" ->
-#     strategos-caddy:80 -> frontend:3000. DB/Redis/API/Front son internos.
-#   - Lee secretos de los .env que VIVEN EN EL SERVIDOR (no se commitean).
+# Differences from docker-compose.yml (dev):
+#   - Uses prebuilt GHCR images (no build:).
+#   - Does not mount source code (the image is self-contained).
+#   - Does NOT publish ports to the host. Strategos brings its OWN internal Caddy
+#     (strategos-caddy, no host ports): the VPS's EXTERNAL Caddy/ingress (owns
+#     80/443, Koalvia/infra repo) forwards the domain over the external "proxy"
+#     network -> strategos-caddy:80 -> frontend:3000. DB/Redis/API/Front are internal.
+#   - Reads secrets from the .env files that LIVE ON THE SERVER (not committed).
 #
-# Uso (en el VPS, lo lanza el workflow de GitHub Actions):
+# Usage (on the VPS, launched by the GitHub Actions workflow):
 #   docker compose -f docker-compose.prod.yml up -d
 #
-# Variables de interpolación (las pone el CI por env, o el ./.env del servidor):
-#   BACKEND_IMAGE, FRONTEND_IMAGE   -> refs de GHCR (tienen default abajo)
-#   PROXY_NETWORK                   -> nombre de la red del Caddy de entrada (default: proxy)
-#   POSTGRES_USER / _PASSWORD / _DB -> credenciales de Postgres
+# Interpolation variables (set by CI via env, or the server's ./.env):
+#   BACKEND_IMAGE, FRONTEND_IMAGE   -> GHCR refs (have a default below)
+#   PROXY_NETWORK                   -> name of the entry Caddy's network (default: proxy)
+#   POSTGRES_USER / _PASSWORD / _DB -> Postgres credentials
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
@@ -81,9 +81,9 @@ services:
       - ./frontend/.env
     environment:
       - NODE_ENV=production
-      # El frontend (server-side) llega al backend por la red interna de docker.
-      # El navegador NUNCA habla con el backend directo: usa los route handlers del front.
-      # NEXT_PUBLIC_API_KEY (secreto) lo aporta ./frontend/.env (env_file), en runtime.
+      # The frontend (server-side) reaches the backend over docker's internal network.
+      # The browser NEVER talks to the backend directly: it uses the frontend's route handlers.
+      # NEXT_PUBLIC_API_KEY (secret) is provided by ./frontend/.env (env_file), at runtime.
       - NEXT_PUBLIC_API_URL=http://api:8000
     depends_on:
       api:
@@ -98,7 +98,7 @@ services:
       start_period: 60s
     restart: unless-stopped
 
-  # Redis (broker de Celery) — interno
+  # Redis (Celery broker) — internal
   redis:
     image: redis:7
     container_name: strategos-redis
@@ -112,7 +112,7 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  # PostgreSQL — interno; persiste en el volumen pgdata
+  # PostgreSQL — internal; persists in the pgdata volume
   db:
     image: postgres:15
     container_name: strategos-db
@@ -132,12 +132,12 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  # Caddy INTERNO de Strategos (sin puertos de host). El Caddy de entrada del VPS
-  # le pasa el dominio por la red "proxy":
+  # INTERNAL Caddy for Strategos (no host ports). The VPS's entry Caddy forwards
+  # the domain over the "proxy" network:
   #   strategos-platform.koalvia.com { reverse_proxy strategos-caddy:80 }
-  # El TLS lo termina el Caddy de entrada; aquí solo se enruta HTTP plano al frontend.
+  # TLS is terminated by the entry Caddy; here we only route plain HTTP to the frontend.
   caddy:
-    image: caddy:latest
+    image: caddy:2
     container_name: strategos-caddy
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile
@@ -146,8 +146,8 @@ services:
     depends_on:
       - frontend
     networks:
-      - strategos-network   # para llegar al frontend
-      - proxy                # para que el Caddy de entrada llegue a strategos-caddy:80
+      - strategos-network   # to reach the frontend
+      - proxy                # so the entry Caddy can reach strategos-caddy:80
     restart: unless-stopped
 
 volumes:
@@ -158,9 +158,9 @@ volumes:
 networks:
   strategos-network:
     driver: bridge
-  # Red EXTERNA ya existente en el VPS, donde vive el Caddy de entrada (Koalvia/infra,
-  # dueño del 80/443). strategos-caddy se cuelga de ella para que el Caddy de entrada
-  # lo alcance por "strategos-caddy:80".
+  # EXTERNAL network that already exists on the VPS, where the entry Caddy lives
+  # (Koalvia/infra, owns 80/443). strategos-caddy hooks into it so the entry Caddy
+  # can reach it at "strategos-caddy:80".
   proxy:
     external: true
     name: ${PROXY_NETWORK:-proxy}

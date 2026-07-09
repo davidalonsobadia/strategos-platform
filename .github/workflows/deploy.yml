@@ -109,16 +109,19 @@ jobs:
       # Deploy via SSH
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1
+        env:
+          GH_ACTOR: ${{ github.actor }}
+          CR_PAT: ${{ secrets.CR_PAT }}
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: IMAGE_NAME,REGISTRY,DEPLOY_DIR
+          envs: IMAGE_NAME,REGISTRY,DEPLOY_DIR,GH_ACTOR,CR_PAT
           script: |
             set -e
 
             echo "Login to GHCR (pull)"
-            echo "${{ secrets.CR_PAT }}" | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
+            echo "$CR_PAT" | docker login "$REGISTRY" -u "$GH_ACTOR" --password-stdin
 
             # Image refs come from CI (single source of truth); compose interpolates these.
             export BACKEND_IMAGE="$REGISTRY/${IMAGE_NAME}-backend:latest"
@@ -139,7 +142,7 @@ jobs:
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --force-recreate --remove-orphans
 
-            echo "Pruning old images"
-            docker image prune -f
+            echo "Pruning old images from this project only (this VPS hosts other projects too)"
+            docker image prune -f --filter "label=org.opencontainers.image.source=https://github.com/${IMAGE_NAME}"
 
             echo "Deployment finished"

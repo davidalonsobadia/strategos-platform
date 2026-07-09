@@ -1,14 +1,14 @@
-# Caddy INTERNO de Strategos (servicio "caddy" / contenedor strategos-caddy).
-# NO escucha en el 80/443 del host: ese lo tiene el Caddy de ENTRADA del VPS
-# (repo Koalvia/infra), que le pasa el dominio por la red "proxy":
+# INTERNAL Caddy for Strategos ("caddy" service / strategos-caddy container).
+# Does NOT listen on the host's 80/443: that belongs to the VPS's ENTRY Caddy
+# (Koalvia/infra repo), which forwards the domain over the "proxy" network:
 #
 #     strategos-platform.koalvia.com {
 #         reverse_proxy strategos-caddy:80
 #     }
 #
-# El TLS lo termina el Caddy de entrada. Aquí solo enrutamos HTTP plano al frontend
-# (Next.js), cuyos route handlers server-side hablan con el backend (api:8000) por la
-# red interna.
+# TLS is terminated by the entry Caddy. Here we only route plain HTTP to the
+# frontend (Next.js), whose server-side route handlers talk to the backend
+# (api:8000) over the internal network.
 
 :80 {
 	encode gzip
