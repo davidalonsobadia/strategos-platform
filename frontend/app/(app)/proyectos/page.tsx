@@ -47,11 +47,17 @@ export default function ProyectosPage() {
   const [allProjects, setAllProjects] = useState<Project[]>([])
 
   const projectTypeOptions = useMemo(
-    () => Array.from(new Set(allProjects.map((p) => p.projectType))).sort(),
+    () =>
+      Array.from(
+        new Set(allProjects.map((p) => p.projectType).filter((v): v is string => !!v)),
+      ).sort(),
     [allProjects],
   )
   const entityTypeOptions = useMemo(
-    () => Array.from(new Set(allProjects.map((p) => p.entityType))).sort(),
+    () =>
+      Array.from(
+        new Set(allProjects.map((p) => p.entityType).filter((v): v is string => !!v)),
+      ).sort(),
     [allProjects],
   )
 

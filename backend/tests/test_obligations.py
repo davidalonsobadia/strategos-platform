@@ -27,6 +27,7 @@ from app.domains.obligations.service import ObligationsService, derive_status
 from app.integrations.business_central.client import BusinessCentralClient
 from app.integrations.business_central.models import (
     BCCustomer,
+    BCCustomerPage,
     BCObligation,
     BCProject,
     BCProjectObligation,
@@ -267,6 +268,9 @@ class _LiveShapedBCClient(BusinessCentralClient):
                 status=CustomerStatus.active,
             )
         ]
+
+    def get_customers_page(self, **kwargs):
+        return BCCustomerPage(items=self.get_customers(), next_cursor=None)
 
     def get_projects(self):
         return [

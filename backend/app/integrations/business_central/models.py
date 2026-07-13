@@ -85,6 +85,18 @@ class BCCustomer(BaseModel):
     status: CustomerStatus
 
 
+class BCCustomerPage(BaseModel):
+    """One page of customers plus an opaque continuation token.
+
+    ``next_cursor`` wraps BC's own ``@odata.nextLink`` for the query that
+    produced this page (see ``LiveBusinessCentralClient.get_customers_page``);
+    it is ``None`` once there is nothing left to page through.
+    """
+
+    items: list[BCCustomer]
+    next_cursor: str | None = None
+
+
 class BCProject(BaseModel):
     """A project delivered for a customer (BC ``GET /projects``).
 
@@ -112,6 +124,18 @@ class BCProject(BaseModel):
     certificate_expiry: date | None = None
     filing_date: date | None = None
     status: ProjectStatus
+
+
+class BCProjectPage(BaseModel):
+    """One page of projects plus an opaque continuation token.
+
+    ``next_cursor`` wraps BC's own ``@odata.nextLink`` for the query that
+    produced this page (see ``LiveBusinessCentralClient.get_projects_page``);
+    it is ``None`` once there is nothing left to page through.
+    """
+
+    items: list[BCProject]
+    next_cursor: str | None = None
 
 
 class BCUser(BaseModel):

@@ -58,6 +58,13 @@ export interface CustomerResponse {
   status: CustomerStatus
 }
 
+// One page of the customers directory, plus an opaque continuation token
+// (pass it back as `cursor` to fetch the next page; `null` once exhausted).
+export interface CustomerPageResponse {
+  items: CustomerResponse[]
+  next_cursor: string | null
+}
+
 // Frontend type (camelCase for easier use in components)
 export interface Customer {
   name: string
@@ -66,6 +73,11 @@ export interface Customer {
   responsible: string
   projectCount: number
   status: CustomerStatus
+}
+
+export interface CustomerPage {
+  items: Customer[]
+  nextCursor: string | null
 }
 
 // Project status matches the Business Central vocabulary the backend returns.
@@ -77,15 +89,17 @@ export interface ProjectCustomerResponse {
   name: string
 }
 
+// project_type/entity_type/has_certificate are nullable: the live Business
+// Central client has no source field for them yet and leaves them null.
 export interface ProjectResponse {
   id: string
   name: string
   customer: ProjectCustomerResponse
-  project_type: string
-  entity_type: string
+  project_type: string | null
+  entity_type: string | null
   responsible: string
   technician: string
-  has_certificate: boolean
+  has_certificate: boolean | null
   certificate_expiry?: string | null
   filing_date?: string | null
   status: ProjectStatus
@@ -96,18 +110,20 @@ export interface Project {
   id: string
   name: string
   customer: ProjectCustomerResponse
-  projectType: string
-  entityType: string
+  projectType: string | null
+  entityType: string | null
   responsible: string
   technician: string
-  hasCertificate: boolean
+  hasCertificate: boolean | null
   certificateExpiry?: string
   filingDate?: string
   status: ProjectStatus
 }
 
 // Derived due state for an obligation instance (values mirror the UI badges).
-export type ObligationStatus = "Vencido" | "Próximo" | "Al día"
+// "Sin fecha" covers instances with no due_date (e.g. live BC links that don't
+// carry date fields yet) — see backend DerivedObligationStatus.undated.
+export type ObligationStatus = "Vencido" | "Próximo" | "Al día" | "Sin fecha"
 
 interface ObligationEntityRef {
   id: string
@@ -125,8 +141,8 @@ export interface ProjectObligationResponse {
   obligation: ObligationTypeRef
   project: ObligationEntityRef
   client: ObligationEntityRef
-  subject: boolean
-  due_date: string
+  subject: boolean | null
+  due_date: string | null
   submission_date?: string | null
   status: ObligationStatus
 }
@@ -137,8 +153,8 @@ export interface ProjectObligation {
   obligation: ObligationTypeRef
   project: ObligationEntityRef
   client: ObligationEntityRef
-  subject: boolean
-  dueDate: string
+  subject: boolean | null
+  dueDate: string | null
   submissionDate?: string
   status: ObligationStatus
 }
@@ -227,6 +243,15 @@ export function transformCustomerResponse(backendCustomer: CustomerResponse): Cu
     responsible: backendCustomer.responsible,
     projectCount: backendCustomer.project_count,
     status: backendCustomer.status,
+  }
+}
+
+export function transformCustomerPageResponse(
+  backendPage: CustomerPageResponse,
+): CustomerPage {
+  return {
+    items: backendPage.items.map(transformCustomerResponse),
+    nextCursor: backendPage.next_cursor,
   }
 }
 

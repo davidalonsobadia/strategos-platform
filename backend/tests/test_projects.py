@@ -7,12 +7,26 @@ real FastAPI app: list count, the fitxa General fields (including the
 customer-name enrichment), the ``search`` / ``project_type`` / ``entity_type`` /
 ``status`` filters and their composition, detail + 404, and that the endpoints
 reject unauthenticated requests.
+
+A second block covers live-shaped data (issue #41/#42 follow-up): the live BC
+client leaves ``project_type``/``entity_type``/``has_certificate`` as ``None``
+(no source field exists yet), which previously crashed ``ProjectResponse``
+validation and the ``project_type``/``entity_type`` filters with a 500.
 """
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.db.session import get_db
+from app.domains.projects.service import ProjectsService
+from app.integrations.business_central.client import BusinessCentralClient
+from app.integrations.business_central.models import (
+    BCCustomer,
+    BCCustomerPage,
+    BCProject,
+    CustomerStatus,
+    ProjectStatus,
+)
 from app.main import app
 
 PROJECTS_URL = "/api/v1/projects"
@@ -162,6 +176,79 @@ def test_detail_unknown_id_returns_404(client):
     """GET /projects/{id} 404s for an unknown id."""
     resp = client.get(f"{PROJECTS_URL}/proj-999")
     assert resp.status_code == 404
+
+
+# --------------------------------------------------------------------------- #
+# Live-shaped data: no project_type/entity_type/has_certificate source (#41/#42)
+# --------------------------------------------------------------------------- #
+
+
+class _LiveShapedBCClient(BusinessCentralClient):
+    """A stand-in BC client shaped like the real (thin) BC payloads.
+
+    The live client has no BC source field for ``project_type``/``entity_type``/
+    ``has_certificate`` yet, so it leaves them ``None`` — exactly what this stub
+    returns, letting us exercise that path without HTTP mocking.
+    """
+
+    def get_customers(self):
+        return [
+            BCCustomer(
+                id="C1",
+                name="Acme SL",
+                nif="A1",
+                customer_type="Company",
+                responsible="MS",
+                active_project_count=1,
+                status=CustomerStatus.active,
+            )
+        ]
+
+    def get_customers_page(self, **kwargs):
+        return BCCustomerPage(items=self.get_customers(), next_cursor=None)
+
+    def get_projects(self):
+        return [
+            BCProject(
+                id="P1",
+                name="Fiscal advisory",
+                customer_id="C1",
+                responsible="",
+                technician="",
+                status=ProjectStatus.active,
+            )
+        ]
+
+    def get_users(self):
+        return []
+
+    def get_user_tasks(self):
+        return []
+
+    def get_obligations(self):
+        return []
+
+    def get_project_obligations(self):
+        return []
+
+
+@pytest.mark.unit
+def test_live_shaped_project_serializes_with_none_type_fields():
+    """A live-shaped project (no type/certificate data) still validates."""
+    service = ProjectsService(db=None, bc_client=_LiveShapedBCClient())
+    projects = service.list_projects()
+    assert len(projects) == 1
+    assert projects[0].project_type is None
+    assert projects[0].entity_type is None
+    assert projects[0].has_certificate is None
+
+
+@pytest.mark.unit
+def test_project_type_filter_excludes_untyped_projects_without_crashing():
+    """Filtering by project_type/entity_type never matches a None field."""
+    service = ProjectsService(db=None, bc_client=_LiveShapedBCClient())
+    assert service.list_projects(project_type="Iguala mensual") == []
+    assert service.list_projects(entity_type="Societat") == []
 
 
 @pytest.mark.auth

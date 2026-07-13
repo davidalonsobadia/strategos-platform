@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a3f1c9e2-6b4d-4e8a-9c2f-2f6a1d5b8e10",
     "name": "Strategos - Business Central API",
-    "description": "Business Central (Dynamics 365) custom API endpoints for the Strategos integration, as provided by Sergio Gayan (Becentis Consulting) over email between 2026-06-30 and 2026-07-08.\n\n**URL pattern**\n`https://api.businesscentral.dynamics.com/v2.0/{tenantId}/{bcEnvironment}/api/{publisher}/{group}/{version}/companies({companyId})/{entity}`\n\n- `tenantId` = e9cf8bf3-1d78-4f23-94f9-9a494d01dc4e\n- `bcEnvironment` = RESTSTR (sandbox/test, confirmed working) or PRODSTR (production, not yet validated with these credentials)\n- `publisher` = strategos (this replaces the generic \"craze\" placeholder from the base BC API)\n- `group` = integrations\n- `version` = v1.0\n- `companyId` = c88d2c0c-2a25-ef11-9f88-6045bddecfa1 (corrected value from Sergio's 2026-07-08 email; an earlier value, 8d69f51b-e5a1-eb11-9d03-00505627a590, was superseded)\n\n**Entities exposed** (per Sergio's 2026-06-30 email): customers, projects, users, userTasks, obligations, projectObligations.\n\n**Auth**: OAuth2 client credentials against Azure AD, configured at the collection level. Fill in `clientId` / `clientSecret` via a Postman *environment* (not committed here) — see the companion `Strategos-BC-Sandbox.postman_environment.json` file.\n\nSecurity note: this collection file itself carries no secrets and is safe to share/commit. The environment file with the real client_id/client_secret should NOT be committed to git or shared outside the team; rotate the secret if it ever leaks.",
+    "description": "Business Central (Dynamics 365) custom API endpoints for the Strategos integration, as provided by Sergio Gayan (Becentis Consulting) over email between 2026-06-30 and 2026-07-08.\n\n**URL pattern**\n`https://api.businesscentral.dynamics.com/v2.0/{tenantId}/{bcEnvironment}/api/{publisher}/{group}/{version}/companies({companyId})/{entity}`\n\n- `tenantId` = e9cf8bf3-1d78-4f23-94f9-9a494d01dc4e\n- `bcEnvironment` = RESTSTR (sandbox/test, confirmed working) or PRODSTR (production, not yet validated with these credentials)\n- `publisher` = strategos (this replaces the generic \"craze\" placeholder from the base BC API)\n- `group` = integrations\n- `version` = v1.0\n- `companyId` = c88d2c0c-2a25-ef11-9f88-6045bddecfa1 (corrected value from Sergio's 2026-07-08 email; an earlier value, 8d69f51b-e5a1-eb11-9d03-00505627a590, was superseded)\n\n**Entities exposed** (per Sergio's 2026-06-30 email): customers, projects, users, userTasks, obligations, projectObligations.\n\n**Auth**: OAuth2 client credentials against Azure AD, configured at the collection level. Fill in `clientId` / `clientSecret` via a Postman *environment* (not committed here) — see the companion `Strategos-BC-Sandbox.postman_environment.json` file.\n\nSecurity note: this collection file itself carries no secrets and is safe to share/commit. The environment file with the real client_id/client_secret should NOT be committed to git or shared outside the team; rotate the secret if it ever leaks.\n\n**Write operations (Create/Update/Delete)**: only GET was confirmed by Sergio's emails and only GET is implemented on the Strategos side (`app/integrations/business_central/client.py` — by deliberate design, per `docs/backlog.md`, Business Central is the system of record and this platform is read-only for BC-owned entities in this round). Whether the underlying BC custom API pages also accept POST/PATCH/DELETE has **not** been confirmed with Becentis. Standard BC \"API page\" objects default to allowing insert/modify/delete unless the AL page explicitly disables them, so it is plausible but unverified. The Create/Update/Delete requests below exist so you can test that empirically against the RESTSTR sandbox — before relying on them:\n1. Run `Metadata > Get $metadata` and check each EntityType's properties/annotations for `Capabilities.InsertRestrictions` / `UpdateRestrictions` / `DeleteRestrictions` or read-only markers.\n2. Field names in the request bodies below are **best-guess camelCase** derived from Strategos' internal DTOs (`app/integrations/business_central/models.py`) — they have not been confirmed against BC's actual OData field names. Adjust them to match `$metadata` before trusting a non-404/405 response.\n3. PATCH/DELETE send `If-Match: *` to skip optimistic-concurrency checks; swap in a real `@odata.etag` value if BC rejects the wildcard.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -137,6 +137,75 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Create Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Customer SL\",\n  \"nif\": \"B000000\",\n  \"customerType\": \"Societat\",\n  \"responsible\": \"Marc Solé\",\n  \"status\": \"Activo\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/customers",
+              "host": ["{{baseUrl}}"],
+              "path": ["customers"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.environment.set('customerId', json.id);",
+                  "  console.log('Stored customerId = ' + json.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Customer (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "If-Match", "value": "*" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"responsible\": \"Anna Ferrer\",\n  \"status\": \"Activo\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/customers({{customerId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["customers({{customerId}})"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Customer",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "If-Match", "value": "*" }],
+            "url": {
+              "raw": "{{baseUrl}}/customers({{customerId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["customers({{customerId}})"]
+            }
+          },
+          "response": []
         }
       ]
     },
@@ -167,6 +236,75 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/projects({{projectId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["projects({{projectId}})"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Project",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Project\",\n  \"customerId\": \"{{customerId}}\",\n  \"projectType\": \"Iguala mensual\",\n  \"entityType\": \"Societat\",\n  \"responsible\": \"Marc Solé\",\n  \"technician\": \"Jordi Vila\",\n  \"hasCertificate\": false,\n  \"status\": \"Activo\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["projects"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.environment.set('projectId', json.id);",
+                  "  console.log('Stored projectId = ' + json.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Project (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "If-Match", "value": "*" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"Inactivo\",\n  \"technician\": \"Núria Camps\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/projects({{projectId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["projects({{projectId}})"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Project",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "If-Match", "value": "*" }],
             "url": {
               "raw": "{{baseUrl}}/projects({{projectId}})",
               "host": ["{{baseUrl}}"],
@@ -211,6 +349,75 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Staff Member\",\n  \"role\": \"Tècnic Comptable\",\n  \"email\": \"new.staff@estrategos.ad\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.environment.set('userId', json.id);",
+                  "  console.log('Stored userId = ' + json.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update User (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "If-Match", "value": "*" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"Responsable Fiscal\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users({{userId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["users({{userId}})"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "If-Match", "value": "*" }],
+            "url": {
+              "raw": "{{baseUrl}}/users({{userId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["users({{userId}})"]
+            }
+          },
+          "response": []
         }
       ]
     },
@@ -241,6 +448,75 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/userTasks({{userTaskId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["userTasks({{userTaskId}})"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create User Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"New task\",\n  \"projectId\": \"{{projectId}}\",\n  \"assigneeId\": \"{{userId}}\",\n  \"status\": \"Pendiente\",\n  \"priority\": \"Media\",\n  \"dueDate\": \"2026-08-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/userTasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["userTasks"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.environment.set('userTaskId', json.id);",
+                  "  console.log('Stored userTaskId = ' + json.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update User Task (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "If-Match", "value": "*" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"En curso\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/userTasks({{userTaskId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["userTasks({{userTaskId}})"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User Task",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "If-Match", "value": "*" }],
             "url": {
               "raw": "{{baseUrl}}/userTasks({{userTaskId}})",
               "host": ["{{baseUrl}}"],
@@ -285,6 +561,75 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Create Obligation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"NEW\",\n  \"name\": \"New obligation type\",\n  \"periodicity\": \"anual\",\n  \"dueDateRule\": \"Description of the due-date rule\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/obligations",
+              "host": ["{{baseUrl}}"],
+              "path": ["obligations"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.environment.set('obligationId', json.id);",
+                  "  console.log('Stored obligationId = ' + json.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Obligation (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "If-Match", "value": "*" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated obligation name\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/obligations({{obligationId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["obligations({{obligationId}})"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Obligation",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "If-Match", "value": "*" }],
+            "url": {
+              "raw": "{{baseUrl}}/obligations({{obligationId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["obligations({{obligationId}})"]
+            }
+          },
+          "response": []
         }
       ]
     },
@@ -315,6 +660,75 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/projectObligations({{projectObligationId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["projectObligations({{projectObligationId}})"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Project Obligation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{projectId}}\",\n  \"obligationId\": \"{{obligationId}}\",\n  \"subject\": true,\n  \"dueDate\": \"2026-09-30\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/projectObligations",
+              "host": ["{{baseUrl}}"],
+              "path": ["projectObligations"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.environment.set('projectObligationId', json.id);",
+                  "  console.log('Stored projectObligationId = ' + json.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Project Obligation (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "If-Match", "value": "*" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"submissionDate\": \"2026-09-15\",\n  \"status\": \"Pendiente\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/projectObligations({{projectObligationId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["projectObligations({{projectObligationId}})"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Project Obligation",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "If-Match", "value": "*" }],
             "url": {
               "raw": "{{baseUrl}}/projectObligations({{projectObligationId}})",
               "host": ["{{baseUrl}}"],

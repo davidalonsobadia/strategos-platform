@@ -18,6 +18,10 @@ import os
 os.environ.setdefault("TESTING", "1")
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
+# Force the mock BC client regardless of a developer's local .env: pydantic-settings
+# reads .env directly (not just os.environ), so a local BUSINESS_CENTRAL_MODE=live
+# would otherwise make the suite issue real network calls to Business Central.
+os.environ["BUSINESS_CENTRAL_MODE"] = "mock"
 
 import pytest
 from fastapi.testclient import TestClient

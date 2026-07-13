@@ -21,6 +21,7 @@ authenticates once. OData ``{"value": [...]}`` envelopes are unwrapped and
 customers/projects, so a single page cannot be assumed).
 """
 
+import base64
 import time
 from collections.abc import Callable
 from datetime import date
@@ -28,12 +29,18 @@ from datetime import date
 import httpx
 
 from app import logger
-from app.integrations.business_central.client import BusinessCentralClient
+from app.integrations.business_central.client import (
+    DEFAULT_CUSTOMERS_PAGE_SIZE,
+    DEFAULT_PROJECTS_PAGE_SIZE,
+    BusinessCentralClient,
+)
 from app.integrations.business_central.models import (
     BCCustomer,
+    BCCustomerPage,
     BCObligation,
     BCProject,
     BCProjectObligation,
+    BCProjectPage,
     BCUser,
     BCUserTask,
     CustomerStatus,
@@ -156,26 +163,43 @@ class LiveBusinessCentralClient(BusinessCentralClient):
 
     # -- OData reads ------------------------------------------------------------
 
-    def _get_all(self, entity: str) -> list[dict]:
-        """Read every row of ``entity``, following ``@odata.nextLink`` pages."""
+    def _get_all(self, entity: str, filter_clause: str | None = None) -> list[dict]:
+        """Read every row of ``entity``, following ``@odata.nextLink`` pages.
+
+        ``filter_clause`` (an OData ``$filter`` expression) is only applied to
+        the first request — once BC hands back a ``nextLink``, that URL
+        already carries the full original query string, so re-applying params
+        there would be redundant (and could conflict).
+        """
         headers = {
             "Authorization": f"Bearer {self._get_token()}",
             "Accept": "application/json",
         }
         rows: list[dict] = []
         url: str | None = f"{self._base_url}/{entity}"
+        params: dict[str, str] | None = (
+            {"$filter": filter_clause} if filter_clause else None
+        )
         while url:
-            response = self._http.get(url, headers=headers)
+            response = self._http.get(url, headers=headers, params=params)
             response.raise_for_status()
             payload = response.json()
             rows.extend(payload.get("value", []))
             url = payload.get("@odata.nextLink")
+            params = None
         return rows
 
     # -- Implemented entities ---------------------------------------------------
 
     def get_customers(self) -> list[BCCustomer]:
-        """Return all customers, mapped from BC's native ``customer`` entity."""
+        """Return all customers, mapped from BC's native ``customer`` entity.
+
+        Fetches every project company-wide to compute ``active_project_count``
+        — appropriate here since every customer is being returned anyway. Used
+        for full id -> name lookups elsewhere (``projects``/``obligations``
+        services); the paginated, filtered directory listing is
+        ``get_customers_page``.
+        """
         active_projects_by_customer: dict[str, int] = {}
         for project in self.get_projects():
             if project.status is ProjectStatus.active:
@@ -183,23 +207,118 @@ class LiveBusinessCentralClient(BusinessCentralClient):
                     active_projects_by_customer.get(project.customer_id, 0) + 1
                 )
 
-        customers: list[BCCustomer] = []
-        for row in self._get_all("customers"):
-            customer_id = row["no"]
-            customers.append(
-                BCCustomer(
-                    id=customer_id,
-                    name=row.get("name", ""),
-                    nif=row.get("vatRegistrationNo", ""),
-                    customer_type=_clean_option(row.get("partnerType")),
-                    responsible=row.get("salespersonCode", ""),
-                    active_project_count=active_projects_by_customer.get(
-                        customer_id, 0
-                    ),
-                    status=self._map_customer_status(row.get("blocked")),
-                )
+        return [
+            self._map_customer_row(row, active_projects_by_customer)
+            for row in self._get_all("customers")
+        ]
+
+    def get_customers_page(
+        self,
+        *,
+        search: str | None = None,
+        status: CustomerStatus | None = None,
+        cursor: str | None = None,
+        page_size: int = DEFAULT_CUSTOMERS_PAGE_SIZE,
+    ) -> BCCustomerPage:
+        """Return one page of customers, filtering server-side via OData ``$filter``.
+
+        ``search``/``status`` are translated into a BC ``$filter`` expression
+        (see ``_customers_filter``) so the filter covers every customer BC
+        holds, not just whatever has already been paged in. This leans on the
+        standard OData v4 query capabilities (``$filter``/``contains``) that
+        BC's platform exposes for any API page — the same layer that already
+        gives us ``@odata.nextLink`` pagination — but it hasn't been exercised
+        against the real BC tenant yet, so treat it as pending live
+        verification like the other BC specifics noted in this module's
+        docstring.
+
+        ``active_project_count`` is computed only for this page's customers
+        (via a ``billToCustomerNo`` filter scoped to their ids), not a
+        company-wide projects fetch, which is what keeps a page fast.
+        """
+        headers = {
+            "Authorization": f"Bearer {self._get_token()}",
+            "Accept": "application/json",
+        }
+
+        if cursor:
+            url = _decode_cursor(cursor)
+            params = None
+        else:
+            url = f"{self._base_url}/customers"
+            params = {"$top": str(page_size)}
+            filter_clause = self._customers_filter(search, status)
+            if filter_clause:
+                params["$filter"] = filter_clause
+
+        response = self._http.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        payload = response.json()
+        rows = payload.get("value", [])
+        next_link = payload.get("@odata.nextLink")
+
+        active_counts = self._active_project_counts_for(
+            [row["no"] for row in rows]
+        )
+        customers = [self._map_customer_row(row, active_counts) for row in rows]
+
+        return BCCustomerPage(
+            items=customers,
+            next_cursor=_encode_cursor(next_link) if next_link else None,
+        )
+
+    def _map_customer_row(
+        self, row: dict, active_projects_by_customer: dict[str, int]
+    ) -> BCCustomer:
+        """Map one BC ``customer`` row to a :class:`BCCustomer`."""
+        customer_id = row["no"]
+        return BCCustomer(
+            id=customer_id,
+            name=row.get("name", ""),
+            nif=row.get("vatRegistrationNo", ""),
+            customer_type=_clean_option(row.get("partnerType")),
+            responsible=row.get("salespersonCode", ""),
+            active_project_count=active_projects_by_customer.get(customer_id, 0),
+            status=self._map_customer_status(row.get("blocked")),
+        )
+
+    def _active_project_counts_for(self, customer_ids: list[str]) -> dict[str, int]:
+        """Count active projects per customer, scoped to just ``customer_ids``."""
+        if not customer_ids:
+            return {}
+
+        id_filter = " or ".join(
+            f"billToCustomerNo eq '{_escape_odata_literal(cid)}'"
+            for cid in customer_ids
+        )
+        counts: dict[str, int] = {}
+        for row in self._get_all("projects", filter_clause=id_filter):
+            if self._map_project_status(row.get("status")) is ProjectStatus.active:
+                customer_id = row.get("billToCustomerNo", "")
+                counts[customer_id] = counts.get(customer_id, 0) + 1
+        return counts
+
+    @staticmethod
+    def _customers_filter(
+        search: str | None, status: CustomerStatus | None
+    ) -> str | None:
+        """Build the OData ``$filter`` for the customers directory's search/status.
+
+        ``status`` mirrors ``_clean_option``'s dual blank-Option sentinel
+        (``""``/``_x0020_``) so "Activo" matches either representation BC may
+        send back for an unblocked customer.
+        """
+        clauses: list[str] = []
+        if search:
+            needle = _escape_odata_literal(search)
+            clauses.append(
+                f"(contains(name,'{needle}') or contains(vatRegistrationNo,'{needle}'))"
             )
-        return customers
+        if status is CustomerStatus.active:
+            clauses.append("(blocked eq '' or blocked eq '_x0020_')")
+        elif status is CustomerStatus.inactive:
+            clauses.append("(blocked ne '' and blocked ne '_x0020_')")
+        return " and ".join(clauses) if clauses else None
 
     def get_projects(self) -> list[BCProject]:
         """Return all projects, mapped from BC's native ``project`` (Job) entity.
@@ -207,19 +326,108 @@ class LiveBusinessCentralClient(BusinessCentralClient):
         ``project_type``/``entity_type``/``has_certificate``/``certificate_expiry``/
         ``filing_date`` have no BC source and are left unset (see ``BCProject``).
         """
-        projects: list[BCProject] = []
-        for row in self._get_all("projects"):
-            projects.append(
-                BCProject(
-                    id=row["no"],
-                    name=row.get("description", ""),
-                    customer_id=row.get("billToCustomerNo", ""),
-                    responsible=row.get("personResponsible", ""),
-                    technician=row.get("projectManager", ""),
-                    status=self._map_project_status(row.get("status")),
-                )
-            )
-        return projects
+        return [self._map_project_row(row) for row in self._get_all("projects")]
+
+    def get_projects_page(
+        self,
+        *,
+        search: str | None = None,
+        project_type: str | None = None,
+        entity_type: str | None = None,
+        status: ProjectStatus | None = None,
+        cursor: str | None = None,
+        page_size: int = DEFAULT_PROJECTS_PAGE_SIZE,
+    ) -> BCProjectPage:
+        """Return one page of projects, filtering server-side via OData ``$filter``.
+
+        ``search``/``status`` are translated into a BC ``$filter`` expression
+        (see ``_projects_filter``), the same "relies on standard OData v4
+        query capabilities, pending live verification" caveat as
+        ``get_customers_page`` applies here too.
+
+        ``project_type``/``entity_type`` have no BC source field yet (see
+        ``BCProject``) — every live row leaves them unset, so a page can never
+        match a specific requested value (this mirrors ``get_customers``'s
+        existing in-memory filtering, which already excludes every live row
+        the same way). Rather than issue a request BC can't filter on and
+        that would come back empty anyway, this short-circuits to an empty
+        page whenever either is given.
+        """
+        if not cursor and (project_type or entity_type):
+            return BCProjectPage(items=[], next_cursor=None)
+
+        headers = {
+            "Authorization": f"Bearer {self._get_token()}",
+            "Accept": "application/json",
+        }
+
+        if cursor:
+            url = _decode_cursor(cursor)
+            params = None
+        else:
+            url = f"{self._base_url}/projects"
+            params = {"$top": str(page_size)}
+            filter_clause = self._projects_filter(search, status)
+            if filter_clause:
+                params["$filter"] = filter_clause
+
+        response = self._http.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        payload = response.json()
+        rows = payload.get("value", [])
+        next_link = payload.get("@odata.nextLink")
+
+        return BCProjectPage(
+            items=[self._map_project_row(row) for row in rows],
+            next_cursor=_encode_cursor(next_link) if next_link else None,
+        )
+
+    def _map_project_row(self, row: dict) -> BCProject:
+        """Map one BC ``project`` (Job) row to a :class:`BCProject`."""
+        return BCProject(
+            id=row["no"],
+            name=row.get("description", ""),
+            customer_id=row.get("billToCustomerNo", ""),
+            responsible=row.get("personResponsible", ""),
+            technician=row.get("projectManager", ""),
+            status=self._map_project_status(row.get("status")),
+        )
+
+    @staticmethod
+    def _projects_filter(search: str | None, status: ProjectStatus | None) -> str | None:
+        """Build the OData ``$filter`` for the projects directory's search/status.
+
+        ``status`` mirrors ``_map_project_status``: only ``Completed`` (case-
+        insensitively) means Inactivo, so "Activo" excludes just that value
+        rather than matching a specific "Open" one.
+        """
+        clauses: list[str] = []
+        if search:
+            needle = _escape_odata_literal(search)
+            clauses.append(f"contains(description,'{needle}')")
+        if status is ProjectStatus.active:
+            clauses.append("tolower(status) ne 'completed'")
+        elif status is ProjectStatus.inactive:
+            clauses.append("tolower(status) eq 'completed'")
+        return " and ".join(clauses) if clauses else None
+
+    def get_customer_names(self, customer_ids: list[str]) -> dict[str, str]:
+        """Return ``{customer_id: name}`` for just ``customer_ids``.
+
+        A direct, scoped ``/customers`` read — unlike ``get_customers()``,
+        this never triggers the company-wide projects fetch used to compute
+        ``active_project_count``, since callers here only want names.
+        """
+        if not customer_ids:
+            return {}
+
+        id_filter = " or ".join(
+            f"no eq '{_escape_odata_literal(cid)}'" for cid in customer_ids
+        )
+        return {
+            row["no"]: row.get("name", "")
+            for row in self._get_all("customers", filter_clause=id_filter)
+        }
 
     def get_users(self) -> list[BCUser]:
         """Return all internal users, mapped from BC's native ``user`` entity."""

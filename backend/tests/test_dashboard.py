@@ -113,8 +113,10 @@ def test_summary_returns_all_sections(frozen_client):
 @pytest.mark.integration
 def test_clientes_activos_matches_customers_endpoint(frozen_client):
     """clientes_activos == count of Activo customers / total from #7."""
-    customers = frozen_client.get(CUSTOMERS_URL).json()
-    active = frozen_client.get(CUSTOMERS_URL, params={"status": "Activo"}).json()
+    customers = frozen_client.get(CUSTOMERS_URL).json()["items"]
+    active = frozen_client.get(
+        CUSTOMERS_URL, params={"status": "Activo"}
+    ).json()["items"]
     kpi = frozen_client.get(SUMMARY_URL).json()["clientes_activos"]
     assert kpi == {"active": len(active), "total": len(customers)}
     assert kpi == {"active": 7, "total": 8}

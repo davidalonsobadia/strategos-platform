@@ -15,14 +15,22 @@ from pathlib import Path
 
 from pydantic import TypeAdapter
 
-from app.integrations.business_central.client import BusinessCentralClient
+from app.integrations.business_central.client import (
+    DEFAULT_CUSTOMERS_PAGE_SIZE,
+    DEFAULT_PROJECTS_PAGE_SIZE,
+    BusinessCentralClient,
+)
 from app.integrations.business_central.models import (
     BCCustomer,
+    BCCustomerPage,
     BCObligation,
     BCProject,
     BCProjectObligation,
+    BCProjectPage,
     BCUser,
     BCUserTask,
+    CustomerStatus,
+    ProjectStatus,
 )
 
 _FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -50,8 +58,80 @@ class MockBusinessCentralClient(BusinessCentralClient):
     def get_customers(self) -> list[BCCustomer]:
         return list(_CUSTOMERS)
 
+    def get_customers_page(
+        self,
+        *,
+        search: str | None = None,
+        status: CustomerStatus | None = None,
+        cursor: str | None = None,
+        page_size: int = DEFAULT_CUSTOMERS_PAGE_SIZE,
+    ) -> BCCustomerPage:
+        """Paginate the fixture list; ``cursor`` is just a stringified offset."""
+        customers = list(_CUSTOMERS)
+
+        if search:
+            needle = search.casefold()
+            customers = [
+                c
+                for c in customers
+                if needle in c.name.casefold() or needle in c.nif.casefold()
+            ]
+
+        if status is not None:
+            customers = [c for c in customers if c.status is status]
+
+        offset = int(cursor) if cursor else 0
+        page = customers[offset : offset + page_size]
+        next_offset = offset + page_size
+        next_cursor = str(next_offset) if next_offset < len(customers) else None
+
+        return BCCustomerPage(items=page, next_cursor=next_cursor)
+
     def get_projects(self) -> list[BCProject]:
         return list(_PROJECTS)
+
+    def get_projects_page(
+        self,
+        *,
+        search: str | None = None,
+        project_type: str | None = None,
+        entity_type: str | None = None,
+        status: ProjectStatus | None = None,
+        cursor: str | None = None,
+        page_size: int = DEFAULT_PROJECTS_PAGE_SIZE,
+    ) -> BCProjectPage:
+        """Paginate the fixture list; ``cursor`` is just a stringified offset."""
+        projects = list(_PROJECTS)
+
+        if search:
+            needle = search.casefold()
+            projects = [p for p in projects if needle in p.name.casefold()]
+
+        if project_type is not None:
+            wanted = project_type.casefold()
+            projects = [
+                p for p in projects if (p.project_type or "").casefold() == wanted
+            ]
+
+        if entity_type is not None:
+            wanted = entity_type.casefold()
+            projects = [
+                p for p in projects if (p.entity_type or "").casefold() == wanted
+            ]
+
+        if status is not None:
+            projects = [p for p in projects if p.status is status]
+
+        offset = int(cursor) if cursor else 0
+        page = projects[offset : offset + page_size]
+        next_offset = offset + page_size
+        next_cursor = str(next_offset) if next_offset < len(projects) else None
+
+        return BCProjectPage(items=page, next_cursor=next_cursor)
+
+    def get_customer_names(self, customer_ids: list[str]) -> dict[str, str]:
+        wanted = set(customer_ids)
+        return {c.id: c.name for c in _CUSTOMERS if c.id in wanted}
 
     def get_users(self) -> list[BCUser]:
         return list(_USERS)

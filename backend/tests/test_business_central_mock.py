@@ -39,11 +39,16 @@ def test_mock_implements_port(client):
 
 
 @pytest.mark.unit
-def test_port_defines_all_six_methods():
-    """The port declares one abstract method per BC endpoint."""
+def test_port_defines_all_expected_methods():
+    """The port declares one abstract method per BC endpoint, plus the
+    paginated ``get_customers_page``/``get_projects_page`` (and the scoped
+    ``get_customer_names`` lookup) used by the directory listings."""
     expected = {
         "get_customers",
+        "get_customers_page",
         "get_projects",
+        "get_projects_page",
+        "get_customer_names",
         "get_users",
         "get_user_tasks",
         "get_obligations",
@@ -64,6 +69,47 @@ def test_get_customers_count_type_and_active_split(client):
     assert len(active) == 7
     assert len(inactive) == 1
     assert inactive[0].name == "Clínica Dental Ordino SL"
+
+
+@pytest.mark.unit
+def test_get_customers_page_slices_and_sets_next_cursor(client):
+    """A page smaller than the fixture list returns a ``next_cursor``."""
+    page = client.get_customers_page(page_size=3)
+    assert len(page.items) == 3
+    assert page.next_cursor is not None
+
+    next_page = client.get_customers_page(page_size=3, cursor=page.next_cursor)
+    assert len(next_page.items) == 3
+    assert {c.id for c in page.items}.isdisjoint({c.id for c in next_page.items})
+
+
+@pytest.mark.unit
+def test_get_customers_page_last_page_has_no_next_cursor(client):
+    """Once every customer has been returned, ``next_cursor`` is ``None``."""
+    page = client.get_customers_page(page_size=100)
+    assert len(page.items) == 8
+    assert page.next_cursor is None
+
+
+@pytest.mark.unit
+def test_get_customers_page_filters_by_search(client):
+    """``search`` matches name or NIF, case-insensitively, across the fixtures."""
+    page = client.get_customers_page(search="puigcerdà", page_size=100)
+    assert [c.name for c in page.items] == ["Fontaneria Puigcerdà SL"]
+
+    page = client.get_customers_page(search="g567890", page_size=100)
+    assert [c.nif for c in page.items] == ["G567890"]
+
+
+@pytest.mark.unit
+def test_get_customers_page_filters_by_status(client):
+    """``status`` keeps only customers in that state."""
+    page = client.get_customers_page(status=CustomerStatus.inactive, page_size=100)
+    assert len(page.items) == 1
+    assert page.items[0].name == "Clínica Dental Ordino SL"
+
+    page = client.get_customers_page(status=CustomerStatus.active, page_size=100)
+    assert len(page.items) == 7
 
 
 @pytest.mark.unit
@@ -99,6 +145,66 @@ def test_get_projects_count_type_and_active_split(client):
 
     active = [p for p in projects if p.status is ProjectStatus.active]
     assert len(active) == 11
+
+
+@pytest.mark.unit
+def test_get_projects_page_slices_and_sets_next_cursor(client):
+    """A page smaller than the fixture list returns a ``next_cursor``."""
+    page = client.get_projects_page(page_size=5)
+    assert len(page.items) == 5
+    assert page.next_cursor is not None
+
+    next_page = client.get_projects_page(page_size=5, cursor=page.next_cursor)
+    assert len(next_page.items) == 5
+    assert {p.id for p in page.items}.isdisjoint({p.id for p in next_page.items})
+
+
+@pytest.mark.unit
+def test_get_projects_page_last_page_has_no_next_cursor(client):
+    """Once every project has been returned, ``next_cursor`` is ``None``."""
+    page = client.get_projects_page(page_size=100)
+    assert len(page.items) == 12
+    assert page.next_cursor is None
+
+
+@pytest.mark.unit
+def test_get_projects_page_filters_by_search(client):
+    """``search`` matches the project name, case-insensitively."""
+    page = client.get_projects_page(search="LABORAL", page_size=100)
+    assert [p.name for p in page.items] == ["Gestió laboral"]
+
+
+@pytest.mark.unit
+def test_get_projects_page_filters_by_type_and_entity(client):
+    """``project_type``/``entity_type`` match case-insensitively, exact value."""
+    page = client.get_projects_page(project_type="iguala trimestral", page_size=100)
+    assert {p.id for p in page.items} == {"proj-003", "proj-004", "proj-011"}
+
+    page = client.get_projects_page(entity_type="Persona física", page_size=100)
+    assert {p.id for p in page.items} == {"proj-003", "proj-004"}
+
+
+@pytest.mark.unit
+def test_get_projects_page_filters_by_status(client):
+    """``status`` keeps only projects in that state."""
+    page = client.get_projects_page(status=ProjectStatus.inactive, page_size=100)
+    assert [p.id for p in page.items] == ["proj-012"]
+
+
+@pytest.mark.unit
+def test_get_customer_names_returns_only_requested_ids(client):
+    """``get_customer_names`` scopes the lookup to just the given ids."""
+    names = client.get_customer_names(["cust-001", "cust-005"])
+    assert names == {
+        "cust-001": "Fontaneria Puigcerdà SL",
+        "cust-005": "Fundació Cultural Andorrana",
+    }
+
+
+@pytest.mark.unit
+def test_get_customer_names_empty_ids_returns_empty_dict(client):
+    """An empty id list returns an empty dict, no error."""
+    assert client.get_customer_names([]) == {}
 
 
 @pytest.mark.unit

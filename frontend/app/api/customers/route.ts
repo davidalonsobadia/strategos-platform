@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { apiFetch, ApiError } from "@/lib/api-client"
 import { config } from "@/lib/config"
 import { getAuthToken } from "@/lib/auth"
-import { type CustomerResponse, transformCustomerResponse } from "@/lib/types"
+import { type CustomerPageResponse, transformCustomerPageResponse } from "@/lib/types"
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,14 +15,17 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search")
     const status = searchParams.get("status")
+    const cursor = searchParams.get("cursor")
 
-    // Forward the optional search/status filters to the backend (server-side filtering).
+    // Forward the optional search/status/cursor params to the backend
+    // (server-side filtering and pagination).
     const query = new URLSearchParams()
     if (search) query.set("search", search)
     if (status) query.set("status", status)
+    if (cursor) query.set("cursor", cursor)
     const queryString = query.toString()
 
-    const backendCustomers = await apiFetch<CustomerResponse[]>(
+    const backendPage = await apiFetch<CustomerPageResponse>(
       `${config.api.endpoints.backend.customers.base}${queryString ? `?${queryString}` : ""}`,
       {
         method: "GET",
@@ -32,11 +35,9 @@ export async function GET(request: NextRequest) {
       }
     )
 
-    const customers = backendCustomers.map(transformCustomerResponse)
-
     return NextResponse.json({
       success: true,
-      data: customers,
+      data: transformCustomerPageResponse(backendPage),
     })
   } catch (error) {
     console.error("[Strategos] Get customers error:", error)

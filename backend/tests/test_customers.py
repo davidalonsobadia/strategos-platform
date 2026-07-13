@@ -2,9 +2,10 @@
 
 The domain has no database model — customers are served from the fixture-backed
 ``MockBusinessCentralClient`` (the default DI mode). These tests exercise the
-``GET /api/v1/customers`` endpoint through the real FastAPI app: list, the
-``search`` and ``status`` filters, response-field parity with ``clientes.png``,
-and that the endpoint rejects unauthenticated requests.
+``GET /api/v1/customers`` endpoint through the real FastAPI app: paginated
+listing (``items``/``next_cursor``), the ``search`` and ``status`` filters,
+response-field parity with ``clientes.png``, and that the endpoint rejects
+unauthenticated requests.
 """
 
 import pytest
@@ -17,12 +18,13 @@ CUSTOMERS_URL = "/api/v1/customers"
 
 
 @pytest.mark.integration
-def test_list_returns_all_eight_customers(client):
-    """The list returns every mock customer."""
+def test_list_returns_all_eight_customers_on_one_page(client):
+    """The default page size comfortably fits all 8 mock customers in one page."""
     resp = client.get(CUSTOMERS_URL)
     assert resp.status_code == 200
     body = resp.json()
-    assert len(body) == 8
+    assert len(body["items"]) == 8
+    assert body["next_cursor"] is None
 
 
 @pytest.mark.integration
@@ -30,7 +32,7 @@ def test_response_fields_match_design_columns(client):
     """Each row exposes exactly the columns from clientes.png."""
     resp = client.get(CUSTOMERS_URL)
     assert resp.status_code == 200
-    row = resp.json()[0]
+    row = resp.json()["items"][0]
     assert set(row) == {
         "name",
         "nif",
@@ -51,12 +53,33 @@ def test_response_fields_match_design_columns(client):
 
 
 @pytest.mark.integration
+def test_page_size_paginates_across_requests(client):
+    """?page_size= caps a page; ?cursor= continues from ``next_cursor``."""
+    first = client.get(CUSTOMERS_URL, params={"page_size": 3})
+    assert first.status_code == 200
+    first_body = first.json()
+    assert len(first_body["items"]) == 3
+    assert first_body["next_cursor"] is not None
+
+    second = client.get(
+        CUSTOMERS_URL, params={"page_size": 3, "cursor": first_body["next_cursor"]}
+    )
+    assert second.status_code == 200
+    second_body = second.json()
+    assert len(second_body["items"]) == 3
+
+    first_names = {c["name"] for c in first_body["items"]}
+    second_names = {c["name"] for c in second_body["items"]}
+    assert first_names.isdisjoint(second_names)
+
+
+@pytest.mark.integration
 def test_search_by_name_is_case_insensitive(client):
     """?search= matches the customer name as a case-insensitive substring."""
     resp = client.get(CUSTOMERS_URL, params={"search": "puigcerdà"})
     assert resp.status_code == 200
     body = resp.json()
-    assert [c["name"] for c in body] == ["Fontaneria Puigcerdà SL"]
+    assert [c["name"] for c in body["items"]] == ["Fontaneria Puigcerdà SL"]
 
 
 @pytest.mark.integration
@@ -65,8 +88,8 @@ def test_search_by_nif(client):
     resp = client.get(CUSTOMERS_URL, params={"search": "g567890"})
     assert resp.status_code == 200
     body = resp.json()
-    assert [c["nif"] for c in body] == ["G567890"]
-    assert body[0]["name"] == "Fundació Cultural Andorrana"
+    assert [c["nif"] for c in body["items"]] == ["G567890"]
+    assert body["items"][0]["name"] == "Fundació Cultural Andorrana"
 
 
 @pytest.mark.integration
@@ -74,7 +97,9 @@ def test_search_with_no_match_returns_empty(client):
     """A search that matches nothing returns an empty list, not an error."""
     resp = client.get(CUSTOMERS_URL, params={"search": "no-such-customer"})
     assert resp.status_code == 200
-    assert resp.json() == []
+    body = resp.json()
+    assert body["items"] == []
+    assert body["next_cursor"] is None
 
 
 @pytest.mark.integration
@@ -83,9 +108,9 @@ def test_status_filter_isolates_the_inactive_customer(client):
     resp = client.get(CUSTOMERS_URL, params={"status": "Inactivo"})
     assert resp.status_code == 200
     body = resp.json()
-    assert len(body) == 1
-    assert body[0]["name"] == "Clínica Dental Ordino SL"
-    assert body[0]["status"] == "Inactivo"
+    assert len(body["items"]) == 1
+    assert body["items"][0]["name"] == "Clínica Dental Ordino SL"
+    assert body["items"][0]["status"] == "Inactivo"
 
 
 @pytest.mark.integration
@@ -94,8 +119,8 @@ def test_status_filter_active_returns_seven(client):
     resp = client.get(CUSTOMERS_URL, params={"status": "Activo"})
     assert resp.status_code == 200
     body = resp.json()
-    assert len(body) == 7
-    assert all(c["status"] == "Activo" for c in body)
+    assert len(body["items"]) == 7
+    assert all(c["status"] == "Activo" for c in body["items"])
 
 
 @pytest.mark.integration

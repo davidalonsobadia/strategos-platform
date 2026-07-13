@@ -29,16 +29,32 @@ class ProjectResponse(BaseModel):
     Field names mirror the project cards in ``proyectos.png`` (name, client,
     project-type & entity-type tags, responsable/técnico, status) plus the
     remaining General fitxa fields (certificate + filing date).
+
+    ``project_type``/``entity_type``/``has_certificate`` are optional because the
+    live Business Central client has no source field for them yet (see
+    ``BCProject``) and leaves them ``None``; the mock client still populates them.
     """
 
     id: str
     name: str
     customer: ProjectCustomer
-    project_type: str
-    entity_type: str
+    project_type: str | None = None
+    entity_type: str | None = None
     responsible: str
     technician: str
-    has_certificate: bool
+    has_certificate: bool | None = None
     certificate_expiry: date | None = None
     filing_date: date | None = None
     status: ProjectStatus
+
+
+class ProjectPageResponse(BaseModel):
+    """One page of the Proyectos directory plus an opaque continuation token.
+
+    ``next_cursor`` is ``None`` once there are no more projects to page
+    through; otherwise pass it back as the ``cursor`` query param to fetch
+    the next page.
+    """
+
+    items: list[ProjectResponse]
+    next_cursor: str | None = None

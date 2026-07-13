@@ -2,17 +2,23 @@
 
 The service reads customers read-only from Business Central via the injected
 :class:`~app.integrations.business_central.client.BusinessCentralClient` port
-(never from fixtures directly), maps the transport DTOs to
-:class:`~app.domains.customers.schemas.CustomerResponse`, and applies the
-optional ``search`` / ``status`` filters in memory (the dataset is small).
+(never from fixtures directly) and maps the transport DTOs to
+:class:`~app.domains.customers.schemas.CustomerResponse`. The optional
+``search`` / ``status`` filters and pagination are delegated to the BC client
+(``get_customers_page``) rather than applied here, since the client is the
+one place that knows how to push them down to BC (or, for the mock, filter
+the fixtures) — see ``get_customers_page`` on each implementation.
 """
 
 from sqlalchemy.orm import Session
 
-from app.integrations.business_central.client import BusinessCentralClient
+from app.integrations.business_central.client import (
+    DEFAULT_CUSTOMERS_PAGE_SIZE,
+    BusinessCentralClient,
+)
 from app.integrations.business_central.models import BCCustomer, CustomerStatus
 
-from .schemas import CustomerResponse
+from .schemas import CustomerPageResponse, CustomerResponse
 
 
 class CustomersService:
@@ -26,26 +32,22 @@ class CustomersService:
         self,
         search: str | None = None,
         status: CustomerStatus | None = None,
-    ) -> list[CustomerResponse]:
-        """Return all customers, optionally filtered by ``search`` and ``status``.
+        cursor: str | None = None,
+        page_size: int = DEFAULT_CUSTOMERS_PAGE_SIZE,
+    ) -> CustomerPageResponse:
+        """Return one page of customers, optionally filtered by ``search``/``status``.
 
         ``search`` matches the customer name **or** NIF as a case-insensitive
-        substring; ``status`` keeps only customers in that state.
+        substring; ``status`` keeps only customers in that state; ``cursor``
+        continues a previous page (see ``CustomerPageResponse.next_cursor``).
         """
-        customers = self.bc_client.get_customers()
-
-        if search:
-            needle = search.casefold()
-            customers = [
-                c
-                for c in customers
-                if needle in c.name.casefold() or needle in c.nif.casefold()
-            ]
-
-        if status is not None:
-            customers = [c for c in customers if c.status is status]
-
-        return [self._to_response(c) for c in customers]
+        page = self.bc_client.get_customers_page(
+            search=search, status=status, cursor=cursor, page_size=page_size
+        )
+        return CustomerPageResponse(
+            items=[self._to_response(c) for c in page.items],
+            next_cursor=page.next_cursor,
+        )
 
     @staticmethod
     def _to_response(customer: BCCustomer) -> CustomerResponse:

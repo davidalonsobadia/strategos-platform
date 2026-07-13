@@ -16,7 +16,7 @@ import { ObligationsTable } from "@/features/obligations/obligations-table"
 import type { ObligationStatus, ProjectObligation } from "@/lib/types"
 
 const ALL = "all"
-const STATUS_OPTIONS: ObligationStatus[] = ["Vencido", "Próximo", "Al día"]
+const STATUS_OPTIONS: ObligationStatus[] = ["Vencido", "Próximo", "Al día", "Sin fecha"]
 
 type StatusFilter = typeof ALL | ObligationStatus
 

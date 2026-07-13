@@ -24,3 +24,15 @@ class CustomerResponse(BaseModel):
     responsible: str
     project_count: int
     status: CustomerStatus
+
+
+class CustomerPageResponse(BaseModel):
+    """One page of the Clientes directory plus an opaque continuation token.
+
+    ``next_cursor`` is ``None`` once there are no more customers to page
+    through; otherwise pass it back as the ``cursor`` query param to fetch the
+    next page.
+    """
+
+    items: list[CustomerResponse]
+    next_cursor: str | None = None

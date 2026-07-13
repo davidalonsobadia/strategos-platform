@@ -9,7 +9,9 @@ interface ProjectCardProps {
 }
 
 // Format an ISO date (YYYY-MM-DD) as DD/MM/YYYY without timezone drift.
-function formatDate(isoDate: string): string {
+// Undated obligations (status "Sin fecha") carry a null due date.
+function formatDate(isoDate: string | null): string {
+  if (!isoDate) return "Sin fecha"
   const [year, month, day] = isoDate.split("-")
   if (!year || !month || !day) return isoDate
   return `${day}/${month}/${year}`
@@ -21,6 +23,7 @@ const OBLIGATION_COLOR: Record<ProjectObligation["status"], string> = {
   Vencido: "text-red-600",
   Próximo: "text-amber-600",
   "Al día": "text-slate-500",
+  "Sin fecha": "text-slate-400",
 }
 
 export function ProjectCard({ project, nextObligation }: ProjectCardProps) {
@@ -44,14 +47,20 @@ export function ProjectCard({ project, nextObligation }: ProjectCardProps) {
         </Badge>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Badge variant="secondary" className="bg-slate-100 font-medium text-slate-600">
-          {project.projectType}
-        </Badge>
-        <Badge variant="secondary" className="bg-slate-100 font-medium text-slate-600">
-          {project.entityType}
-        </Badge>
-      </div>
+      {(project.projectType || project.entityType) && (
+        <div className="flex flex-wrap gap-2">
+          {project.projectType && (
+            <Badge variant="secondary" className="bg-slate-100 font-medium text-slate-600">
+              {project.projectType}
+            </Badge>
+          )}
+          {project.entityType && (
+            <Badge variant="secondary" className="bg-slate-100 font-medium text-slate-600">
+              {project.entityType}
+            </Badge>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
         <p className="text-sm text-slate-500">

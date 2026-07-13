@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -20,7 +21,9 @@ export default function ClientesPage() {
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState<StatusFilter>("all")
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
 
   // Debounce the search term so typing doesn't hit the backend on every keystroke.
   const [debouncedSearch, setDebouncedSearch] = useState("")
@@ -29,6 +32,7 @@ export default function ClientesPage() {
     return () => clearTimeout(handle)
   }, [search])
 
+  // Whenever the search/status filters change, restart pagination from page 1.
   useEffect(() => {
     let active = true
 
@@ -40,10 +44,19 @@ export default function ClientesPage() {
           status: status === "all" ? undefined : status,
         })
         if (!active) return
-        setCustomers(result.success && result.data ? result.data : [])
+        if (result.success && result.data) {
+          setCustomers(result.data.items)
+          setNextCursor(result.data.nextCursor)
+        } else {
+          setCustomers([])
+          setNextCursor(null)
+        }
       } catch (error) {
         console.error("[Strategos] Load customers error:", error)
-        if (active) setCustomers([])
+        if (active) {
+          setCustomers([])
+          setNextCursor(null)
+        }
       } finally {
         if (active) setLoading(false)
       }
@@ -54,6 +67,26 @@ export default function ClientesPage() {
       active = false
     }
   }, [debouncedSearch, status])
+
+  const handleLoadMore = async () => {
+    if (!nextCursor) return
+    setLoadingMore(true)
+    try {
+      const result = await customersApi.getCustomers({
+        search: debouncedSearch || undefined,
+        status: status === "all" ? undefined : status,
+        cursor: nextCursor,
+      })
+      if (result.success && result.data) {
+        setCustomers((prev) => [...prev, ...result.data!.items])
+        setNextCursor(result.data.nextCursor)
+      }
+    } catch (error) {
+      console.error("[Strategos] Load more customers error:", error)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   return (
     <div className="px-8 py-8">
@@ -82,6 +115,14 @@ export default function ClientesPage() {
       <div className="mt-6">
         <CustomersTable customers={customers} loading={loading} />
       </div>
+
+      {!loading && nextCursor && (
+        <div className="mt-4 flex justify-center">
+          <Button variant="outline" onClick={handleLoadMore} disabled={loadingMore}>
+            {loadingMore ? "Cargando..." : "Cargar más"}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

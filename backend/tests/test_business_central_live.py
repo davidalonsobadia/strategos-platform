@@ -208,6 +208,148 @@ def test_pagination_follows_next_link():
     assert all(isinstance(c, BCCustomer) for c in customers)
 
 
+def _build_customers_page(
+    *,
+    customers_rows=None,
+    customers_next_link=None,
+    projects_rows=None,
+):
+    """Build a live client + request recorder for ``get_customers_page`` tests.
+
+    Unlike ``_build`` (which exercises the full-drain ``get_customers``/
+    ``get_projects``), this records every request so tests can assert exactly
+    what query BC was sent (``$top``/``$filter``) and which paths were hit.
+    """
+    customers_rows = customers_rows if customers_rows is not None else []
+    projects_rows = projects_rows if projects_rows is not None else []
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.host == _TOKEN_HOST:
+            return httpx.Response(
+                200,
+                json={
+                    "access_token": "token-1",
+                    "expires_in": 3600,
+                    "token_type": "Bearer",
+                },
+            )
+
+        assert request.headers.get("Authorization", "").startswith("Bearer ")
+        path = request.url.path
+
+        if path.endswith("/customers"):
+            body = {"value": customers_rows}
+            if customers_next_link is not None:
+                body["@odata.nextLink"] = customers_next_link
+            return httpx.Response(200, json=body)
+
+        if path.endswith("/projects"):
+            return httpx.Response(200, json={"value": projects_rows})
+
+        return httpx.Response(404, json={"error": f"unexpected path {path}"})
+
+    http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    client = LiveBusinessCentralClient(
+        **_CONFIG, http_client=http_client, clock=lambda: 0.0
+    )
+    return client, requests
+
+
+@pytest.mark.unit
+def test_customers_page_sends_top_and_combined_filter():
+    """A fresh page request carries ``$top`` and a search+status ``$filter``."""
+    rows = [{"no": "C1", "name": "Acme SL", "vatRegistrationNo": "A1", "blocked": ""}]
+    client, requests = _build_customers_page(customers_rows=rows)
+
+    client.get_customers_page(search="acme", status=CustomerStatus.active, page_size=5)
+
+    customers_request = next(r for r in requests if r.url.path.endswith("/customers"))
+    params = customers_request.url.params
+    assert params["$top"] == "5"
+    assert "contains(name,'acme')" in params["$filter"]
+    assert "contains(vatRegistrationNo,'acme')" in params["$filter"]
+    assert "blocked eq '' or blocked eq '_x0020_'" in params["$filter"]
+
+
+@pytest.mark.unit
+def test_customers_page_status_inactive_uses_negated_blank_clause():
+    """``Inactivo`` negates both blank-Option sentinels, not just one."""
+    client, requests = _build_customers_page(customers_rows=[])
+
+    client.get_customers_page(status=CustomerStatus.inactive)
+
+    customers_request = next(r for r in requests if r.url.path.endswith("/customers"))
+    assert (
+        "blocked ne '' and blocked ne '_x0020_'"
+        in customers_request.url.params["$filter"]
+    )
+
+
+@pytest.mark.unit
+def test_customers_page_scopes_project_count_to_page_customer_ids():
+    """``active_project_count`` is computed from a projects query scoped to
+    just this page's customer ids, not a company-wide fetch."""
+    rows = [
+        {"no": "C1", "name": "Acme", "blocked": ""},
+        {"no": "C2", "name": "Beta", "blocked": ""},
+    ]
+    projects = [
+        {"no": "P1", "billToCustomerNo": "C1", "status": "Open"},
+        {"no": "P2", "billToCustomerNo": "C1", "status": "Completed"},
+        {"no": "P3", "billToCustomerNo": "C2", "status": "Open"},
+    ]
+    client, requests = _build_customers_page(customers_rows=rows, projects_rows=projects)
+
+    page = client.get_customers_page(page_size=2)
+
+    by_id = {c.id: c for c in page.items}
+    assert by_id["C1"].active_project_count == 1
+    assert by_id["C2"].active_project_count == 1
+
+    projects_request = next(r for r in requests if r.url.path.endswith("/projects"))
+    filter_value = projects_request.url.params["$filter"]
+    assert "billToCustomerNo eq 'C1'" in filter_value
+    assert "billToCustomerNo eq 'C2'" in filter_value
+
+
+@pytest.mark.unit
+def test_customers_page_no_rows_skips_projects_request():
+    """An empty page (e.g. a search matching nothing) never queries projects."""
+    client, requests = _build_customers_page(customers_rows=[])
+
+    page = client.get_customers_page()
+
+    assert page.items == []
+    assert not any(r.url.path.endswith("/projects") for r in requests)
+
+
+@pytest.mark.unit
+def test_customers_page_cursor_reuses_next_link_exactly():
+    """The cursor round-trips to exactly the recorded ``@odata.nextLink``, and
+    a continuation request carries no fresh ``$top``/``$filter`` (already
+    baked into that URL)."""
+    next_link = (
+        "https://api.businesscentral.dynamics.com/v2.0/test-tenant/RESTSTR/api/"
+        "strategos/integrations/v1.0/companies(test-company)/customers"
+        "?$top=5&$skiptoken=abc"
+    )
+    client, requests = _build_customers_page(
+        customers_rows=[{"no": "C1", "name": "Acme", "blocked": ""}],
+        customers_next_link=next_link,
+    )
+
+    page = client.get_customers_page(search="acme", page_size=5)
+    assert page.next_cursor is not None
+
+    requests.clear()
+    client.get_customers_page(cursor=page.next_cursor)
+
+    customers_request = next(r for r in requests if r.url.path.endswith("/customers"))
+    assert str(customers_request.url) == next_link
+
+
 @pytest.mark.unit
 def test_customer_field_mapping_and_status():
     """Customers map from BC ``customer`` fields with the confirmed rules."""
