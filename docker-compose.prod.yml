@@ -51,7 +51,13 @@ services:
   worker:
     image: ${BACKEND_IMAGE:-ghcr.io/davidalonsobadia/strategos-platform-backend:latest}
     container_name: strategos-worker
-    command: celery -A app.celery_app.celery worker --loglevel=info
+    # -B/--beat embeds the Beat scheduler thread inside this worker process, so the
+    # single worker both consumes and publishes scheduled tasks (e.g. bopa.sync_daily)
+    # without a separate beat container. This ASSUMES a single worker replica: if this
+    # service is ever scaled beyond one replica, each replica embeds its own scheduler
+    # and every periodic task fires once per replica per tick — at that point drop -B
+    # and add a dedicated `beat` service instead (as dev's docker-compose.yml does).
+    command: celery -A app.celery_app.celery worker -B --loglevel=info
     env_file:
       - ./backend/.env
     environment:
