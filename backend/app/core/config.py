@@ -50,6 +50,21 @@ class Settings(BaseSettings):
     BC_API_GROUP: str = "integrations"
     BC_API_VERSION: str = "v1.0"
 
+    # BOPA integration mode. "mock" (default) serves committed fixtures with no
+    # network calls; "live" talks to the real BOPA Azure Functions API using the
+    # BOPA_* settings below.
+    BOPA_MODE: str = "mock"
+
+    # BOPA live-client connection settings. Only consulted when BOPA_MODE="live".
+    # The API base, blob base and both keys carry the real public defaults: the
+    # keys are Azure Function keys shipped in bopa.ad's public frontend bundle
+    # (not secrets), kept configurable so they can be rotated without a code
+    # change if BOPA ever changes them.
+    BOPA_API_BASE_URL: str = "https://bopaazurefunctions.azurewebsites.net"
+    BOPA_BLOB_BASE_URL: str = "https://bopadocuments.blob.core.windows.net/bopa-documents"
+    BOPA_MONTH_BULLETINS_KEY: str = "oEQCEj04L-FHloPFFtfdXyOZozUafYV_uqL6sQdePkF0AzFuZTJP3w=="
+    BOPA_DOCUMENTS_KEY: str = "g0LIbgotqEe94pypk8MWNTWr3ldcgMQ70o0fSarhINWwAzFuCnk3Lg=="
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 settings = Settings()
