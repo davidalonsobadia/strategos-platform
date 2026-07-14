@@ -6,6 +6,11 @@ from fastapi import Depends, HTTPException
 from app.core.config import settings
 from app.core.security import get_current_user
 from app.domains.auth.models import User
+from app.integrations.bopa import (
+    BopaClient,
+    LiveBopaClient,
+    MockBopaClient,
+)
 from app.integrations.business_central import (
     BusinessCentralClient,
     LiveBusinessCentralClient,
@@ -44,5 +49,32 @@ def get_business_central_client() -> BusinessCentralClient:
         return _live_business_central_client()
     raise RuntimeError(
         f"Unsupported BUSINESS_CENTRAL_MODE: {settings.BUSINESS_CENTRAL_MODE!r}. "
+        'Expected "mock" or "live".'
+    )
+
+
+@lru_cache(maxsize=1)
+def _live_bopa_client() -> LiveBopaClient:
+    """Build the live BOPA client once so its HTTP connection pool is reused.
+
+    The provider below runs per request; caching the instance keeps one pool for
+    the whole process rather than opening a fresh client every call.
+    """
+    return LiveBopaClient.from_settings(settings)
+
+
+def get_bopa_client() -> BopaClient:
+    """Return the BOPA client for the configured mode.
+
+    ``BOPA_MODE`` defaults to ``"mock"``, a fixture-backed client that needs no
+    network access. ``"live"`` returns the real BOPA client built from the
+    ``BOPA_*`` settings. Any other value is rejected explicitly.
+    """
+    if settings.BOPA_MODE == "mock":
+        return MockBopaClient()
+    if settings.BOPA_MODE == "live":
+        return _live_bopa_client()
+    raise RuntimeError(
+        f"Unsupported BOPA_MODE: {settings.BOPA_MODE!r}. "
         'Expected "mock" or "live".'
     )
