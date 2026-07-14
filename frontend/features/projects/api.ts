@@ -1,7 +1,7 @@
 // Projects feature API client (client-side).
 // Calls the Next.js route handlers under /api/projects and /api/obligations —
 // never the backend directly.
-import type { ProjectObligation, ProjectPage, ProjectStatus } from "@/lib/types"
+import type { Project, ProjectObligation, ProjectPage, ProjectStatus } from "@/lib/types"
 
 export interface GetProjectsParams {
   search?: string
@@ -25,6 +25,13 @@ export const projectsApi = {
     const queryString = query.toString()
 
     const response = await fetch(`/api/projects${queryString ? `?${queryString}` : ""}`)
+    return response.json()
+  },
+
+  async getProject(
+    id: string,
+  ): Promise<{ success: boolean; data?: Project; message?: string }> {
+    const response = await fetch(`/api/projects/${encodeURIComponent(id)}`)
     return response.json()
   },
 
