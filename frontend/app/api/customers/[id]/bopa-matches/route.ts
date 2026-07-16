@@ -8,7 +8,7 @@ const FORWARDED_PARAMS = ["limit", "offset"] as const
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ customer_id: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const token = await getAuthToken()
@@ -17,7 +17,12 @@ export async function GET(
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 })
     }
 
-    const { customer_id } = await params
+    const resolvedParams = await params
+    const customer_id = resolvedParams.id
+
+    if (!customer_id) {
+      return NextResponse.json({ success: false, message: "Missing customer ID" }, { status: 400 })
+    }
 
     const { searchParams } = new URL(request.url)
     const query = new URLSearchParams()
@@ -28,8 +33,7 @@ export async function GET(
     const queryString = query.toString()
 
     const data = await apiFetch<BopaDocumentPage>(
-      `/api/v1/customers/${encodeURIComponent(customer_id)}/bopa-matches${
-        queryString ? `?${queryString}` : ""
+      `/api/v1/customers/${encodeURIComponent(customer_id)}/bopa-matches${queryString ? `?${queryString}` : ""
       }`,
       {
         method: "GET",

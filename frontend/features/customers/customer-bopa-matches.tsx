@@ -85,8 +85,8 @@ export function CustomerBopaMatches({ customerId }: { customerId: string }) {
   }
 
   return (
-    <section className="mt-8">
-      <div className="flex items-start justify-between"> //revisar el cambio
+    <section className="mt-8 w-full">
+      <div className="pb-2">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Documentos BOPA Coincidentes</h2>
           <p className="mt-1 text-sm text-slate-500">
@@ -95,18 +95,7 @@ export function CustomerBopaMatches({ customerId }: { customerId: string }) {
         </div>
       </div>
 
-      {/*Fast action button if didnt search yet */}
-      {!hasSearched && (
-        <Button
-          onClick={triggerSearch}
-          className="bg-slate-900 hover:bg-slate-800 text-white font-medium flex items-center gap-2"
-        >
-          <Search className="h-4 w-4" />
-          Comprobar BOPA
-        </Button>
-      )}
-
-      <div className="mt-4 rounded-lg border border-slate-200 bg-white">
+      <div className="mt-4 rounded-lg border border-slate-200 bg-white w-full">
         {/*Initial state: User not requested the searching */}
         {!hasSearched ? (
           <div className="px-6 py-12 text-center text-sm text-slate-500">
@@ -120,7 +109,6 @@ export function CustomerBopaMatches({ customerId }: { customerId: string }) {
             </p>
             <Button
               onClick={triggerSearch}
-              variant="outline"
               className="mt-4 border-slate-300 text-slate-700 hover:bg-slate-50"
             >
               Iniciar Escaneo
