@@ -99,3 +99,47 @@ class BopaDocument(Base):
     def bulletin_num(self) -> int:
         """Issue number of the owning bulletin."""
         return self.bulletin.num
+
+
+class BopaAnalysisLog(Base):
+    """Log to track which BopaBulletin has already been analyzed for customer matches."""
+
+    __tablename__ = "bopa_analysis_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    bulletin_id = Column(
+        Integer,
+        ForeignKey("bopa_bulletins.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    matches_found = Column(Integer, nullable=False, default=0)
+    analyzed_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    bulletin = relationship("BopaBulletin")
+
+
+class BopaMatch(Base):
+    """A matched occurrence of a customer or project within a BopaDocument."""
+
+    __tablename__ = "bopa_matches"
+    __table_args__ = (
+        UniqueConstraint(
+            "customer_id", "document_id", name="uq_bopa_match_customer_doc"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(String, nullable=False, index=True)
+    project_id = Column(String, nullable=True, index=True)
+    document_id = Column(
+        Integer,
+        ForeignKey("bopa_documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    matched_term = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    document = relationship("BopaDocument")

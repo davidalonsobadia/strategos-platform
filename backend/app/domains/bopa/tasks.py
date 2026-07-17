@@ -47,7 +47,7 @@ def analyze_bopa_matches():
         if not unanalyzed_bulletins:
             logger.info("BOPA analysis: No new bulletins to analyze.")
             return
-        
+
         # Fetch customers and projects from Business Central
         bc_client = get_business_central_client()
 
@@ -92,7 +92,7 @@ def analyze_bopa_matches():
                                 document_id=doc.id,
                                 matched_term=project.name,
                             )
-                        )  
+                        )
 
             # Save matches to DB in bulk
             if matches_to_insert:
@@ -113,7 +113,7 @@ def analyze_bopa_matches():
             f"BOPA analysis complete: Processed {len(unanalyzed_bulletins)} bulletins, "
             f"found {total_matches} new matches."
         )
-    
+
     except Exception as e:
         db.rollback()
         logger.error(f"BOPA analysis failed: {str(e)}")
