@@ -43,21 +43,24 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
-    # In testing mode, if no credentials provided, use the test user from conftest
-    if os.environ.get("TESTING") == "1" and credentials is None:
-        # This will be satisfied by the dependency override in conftest.py
-        # Return a marker to trigger the override resolution
-        test_user = db.query(User).filter(User.email == "test@example.com").first()
-        if test_user:
-            return test_user
-        # If test user doesn't exist in DB, the override in conftest will provide it
-        raise ValueError("Test user not found - ensure conftest.py fixture is applied")
-
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    # In testing mode, if no credentials provided, fall back to the test user
+    # seeded by conftest.py. When no such user exists (e.g. the authentication
+    # tests) or the schema is not present, treat the request as unauthenticated
+    # rather than crashing.
+    if os.environ.get("TESTING") == "1" and credentials is None:
+        try:
+            test_user = db.query(User).filter(User.email == "test@example.com").first()
+        except Exception:
+            test_user = None
+        if test_user:
+            return test_user
+        raise credentials_exception
 
     if credentials is None:
         raise credentials_exception
