@@ -1,4 +1,3 @@
-import os
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional
@@ -14,8 +13,7 @@ from app.db.session import get_db
 from app.domains.auth.models import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-# In testing mode, HTTPBearer won't auto-error, allowing tests to bypass token requirement
-security = HTTPBearer(auto_error=os.environ.get("TESTING") != "1")
+security = HTTPBearer()
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
@@ -40,7 +38,7 @@ def generate_reset_token() -> str:
     return secrets.token_urlsafe(32)
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
     credentials_exception = HTTPException(
@@ -48,23 +46,6 @@ async def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-
-    # In testing mode, if no credentials provided, fall back to the test user
-    # seeded by conftest.py. When no such user exists (e.g. the authentication
-    # tests) or the schema is not present, treat the request as unauthenticated
-    # rather than crashing.
-    if os.environ.get("TESTING") == "1" and credentials is None:
-        try:
-            test_user = db.query(User).filter(User.email == "test@example.com").first()
-        except Exception:
-            test_user = None
-        if test_user:
-            return test_user
-        raise credentials_exception
-
-    if credentials is None:
-        raise credentials_exception
-
     try:
         token = credentials.credentials
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])

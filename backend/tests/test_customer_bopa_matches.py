@@ -337,3 +337,73 @@ def test_analyze_bopa_matches_persists(_wire_analysis_task, bopa_bulletin_factor
     match = _wire_analysis_task.query(BopaMatch).filter_by(customer_id="cust-001").first()
     assert match is not None
     assert match.matched_term == "ACME Corp"
+
+
+class MockBCClientCustomerAndProject:
+    """A customer plus one of that customer's projects, both matchable."""
+
+    def get_customers(self):
+        return [type("obj", (object,), {"id": "cust-001", "name": "ACME Corp"})()]
+
+    def get_projects(self):
+        return [
+            type(
+                "obj",
+                (object,),
+                {"id": "proj-1", "customer_id": "cust-001", "name": "Bridge Renewal"},
+            )()
+        ]
+
+
+@pytest.mark.integration
+def test_analyze_dedupes_customer_and_project_match_on_same_document(
+    db_session, monkeypatch, bopa_bulletin_factory
+):
+    """A document matching both a customer name and one of that customer's
+    project names yields a single match (project-level), not a duplicate that
+    would violate uq_bopa_match_customer_doc."""
+    monkeypatch.setattr(tasks, "SessionLocal", lambda: db_session)
+    monkeypatch.setattr(
+        tasks, "get_business_central_client", lambda: MockBCClientCustomerAndProject()
+    )
+
+    bulletin = bopa_bulletin_factory()
+    bulletin_id = bulletin.id
+    doc = BopaDocument(
+        bulletin_id=bulletin_id,
+        title="ACME Corp awarded the Bridge Renewal contract",
+        html_content="ACME Corp will lead the Bridge Renewal works.",
+        document_name="doc1.html",
+        file_type="html",
+        organisme="Ministry of Commerce",
+        organisme_pare="Government",
+        tema="Business Agreements",
+        tema_pare="Commerce",
+        article_date=datetime(2026, 1, 1),
+        source_url="https://example.com/doc1.html",
+        pdf_url="https://example.com/doc1.pdf",
+    )
+    db_session.add(doc)
+    db_session.commit()
+    doc_id = doc.id  # Capture before the task closes/expires the session
+
+    # Must not raise IntegrityError on the unique (customer_id, document_id) key.
+    tasks.analyze_bopa_matches()
+
+    matches = (
+        db_session.query(BopaMatch)
+        .filter_by(customer_id="cust-001", document_id=doc_id)
+        .all()
+    )
+    assert len(matches) == 1
+    # The project-level match takes precedence over the bare customer match.
+    assert matches[0].project_id == "proj-1"
+    assert matches[0].matched_term == "Bridge Renewal"
+
+    log = (
+        db_session.query(BopaAnalysisLog)
+        .filter_by(bulletin_id=bulletin_id)
+        .first()
+    )
+    assert log is not None
+    assert log.matches_found == 1

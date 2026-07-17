@@ -36,7 +36,7 @@ def analyze_bopa_matches():
     """
     db = SessionLocal()
     try:
-        # Find bulletines that have not been analyzed yet
+        # Find bulletins that have not been analyzed yet
         unanalyzed_bulletins = (
             db.query(BopaBulletin)
             .outerjoin(BopaAnalysisLog, BopaBulletin.id == BopaAnalysisLog.bulletin_id)
@@ -71,28 +71,40 @@ def analyze_bopa_matches():
                 # Combine title and content for a full-text substring search
                 searchable_text = f"{doc.title} {doc.html_content or ''}".lower()
 
+                # Deduplicate on (customer_id, document_id): the unique
+                # constraint uq_bopa_match_customer_doc allows only one match per
+                # customer per document. A document mentioning both a customer's
+                # name and one of that customer's project names would otherwise
+                # produce two rows with the same key and raise IntegrityError.
+                # A project-level match (project_id set) takes precedence over a
+                # bare customer-name match.
+                doc_matches: dict[tuple[str, int], BopaMatch] = {}
+
                 # Check for customer name matches
                 for customer in customers:
                     if customer.name and customer.name.lower() in searchable_text:
-                        matches_to_insert.append(
+                        key = (customer.id, doc.id)
+                        doc_matches.setdefault(
+                            key,
                             BopaMatch(
                                 customer_id=customer.id,
                                 document_id=doc.id,
                                 matched_term=customer.name,
-                            )
+                            ),
                         )
 
-                # Check for project name matches
+                # Check for project name matches (override any bare customer match)
                 for project in projects:
                     if project.name and project.name.lower() in searchable_text:
-                        matches_to_insert.append(
-                            BopaMatch(
-                                customer_id=project.customer_id,
-                                project_id=project.id,
-                                document_id=doc.id,
-                                matched_term=project.name,
-                            )
+                        key = (project.customer_id, doc.id)
+                        doc_matches[key] = BopaMatch(
+                            customer_id=project.customer_id,
+                            project_id=project.id,
+                            document_id=doc.id,
+                            matched_term=project.name,
                         )
+
+                matches_to_insert.extend(doc_matches.values())
 
             # Save matches to DB in bulk
             if matches_to_insert:
