@@ -14,6 +14,7 @@ also works under a bare ``pytest`` invocation.
 """
 
 import os
+from typing import Generator
 
 os.environ.setdefault("TESTING", "1")
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -74,8 +75,13 @@ def test_user(db_session) -> User:
 
 
 @pytest.fixture
-def client(db_session, test_user) -> TestClient:
-    """A TestClient wired to the in-memory DB and authenticated as ``test_user``."""
+def client(db_session, test_user) -> Generator[TestClient, None, None]:
+    """A TestClient wired to the in-memory DB and authenticated as ``test_user``.
+
+    When TESTING=1, HTTPBearer auth is bypassed and the test_user is returned.
+    This fixture ensures the test_user exists in the database for lookup.
+    """
+    app.dependency_overrides.clear()
 
     def override_get_db():
         yield db_session
@@ -85,6 +91,32 @@ def client(db_session, test_user) -> TestClient:
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_verified_user] = override_get_verified_user
+
     with TestClient(app) as test_client:
         yield test_client
+
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def bopa_bulletin_factory(db_session):
+    """Factory to create BopaBulletin instances for testing."""
+    from datetime import datetime
+
+    from app.domains.bopa.models import BopaBulletin
+
+    def _create_bulletin(year=2026, num=1, is_extra=False, total_document_count=2):
+        bulletin = BopaBulletin(
+            year=year,
+            num=num,
+            is_extra=is_extra,
+            published_at=datetime(year, 1, 1),
+            total_document_count=total_document_count,
+            sumari_pdf_url=f"https://example.com/sumari_{year}_{num}.pdf",
+        )
+        db_session.add(bulletin)
+        db_session.flush()  # Assign ID without committing
+        return bulletin
+
+    return _create_bulletin
+

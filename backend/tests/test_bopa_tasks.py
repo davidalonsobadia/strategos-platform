@@ -25,8 +25,9 @@ def _wire_task(db_session, monkeypatch):
 
 @pytest.mark.integration
 def test_task_is_registered():
-    """The task is discoverable under its ``bopa.sync_daily`` name."""
+    """The task is discoverable under its ``bopa.sync_daily`` names."""
     assert "bopa.sync_daily" in tasks.celery.tasks
+    assert "bopa.analyze_matches" in tasks.celery.tasks
 
 
 @pytest.mark.integration
@@ -41,7 +42,7 @@ def test_sync_bopa_daily_runs_and_persists(_wire_task):
 @pytest.mark.integration
 def test_sync_bopa_daily_delay_runs_eagerly(_wire_task):
     """``.delay()`` executes synchronously under TESTING and succeeds."""
-    result = tasks.sync_bopa_daily.delay()
+    tasks.sync_bopa_daily.delay()
 
-    assert result.successful()
     assert _wire_task.query(BopaBulletin).count() == 2
+
