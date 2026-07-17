@@ -96,4 +96,3 @@ def get_customer_bopa_matches(
         limit=limit,
         offset=offset,
     )
-

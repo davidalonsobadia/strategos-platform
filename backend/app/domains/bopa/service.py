@@ -406,4 +406,3 @@ class BopaService:
             items=[DocumentSummary.model_validate(d) for d in documents],
             total=total,
         )
-    
