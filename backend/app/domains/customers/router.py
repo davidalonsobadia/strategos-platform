@@ -5,7 +5,7 @@ of record. Every route requires a verified user (and the ``x-api-key`` gateway
 header, except under ``TESTING=1``).
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_bopa_client, get_business_central_client

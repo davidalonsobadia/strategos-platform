@@ -169,6 +169,8 @@ def test_offset_parameter_skips_results(authenticated_client):
     second_ids = {item["id"] for item in resp_second.json()["items"]}
     # Second page may have overlap, but if both have results, they should differ
     # (unless there are fewer than 5 total items).
+    if len(first_ids) == 10 and len(second_ids) > 0:
+        assert first_ids != second_ids
 
 
 @pytest.mark.integration

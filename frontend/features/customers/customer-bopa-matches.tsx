@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import { customersApi } from "@/features/customers/api"
 import type { BopaDocument } from "@/features/bopa/api"
 import { cn } from "@/lib/utils"
-import { Search, Loader2, AlertTriangle, CheckCircle } from "lucide-react"
+import { Search, Loader2 } from "lucide-react"
 
 const HEAD_CLASS = "text-xs font-semibold uppercase tracking-wide text-slate-500"
 const PAGE_SIZE = 10
@@ -31,7 +31,6 @@ export function CustomerBopaMatches({ customerId }: { customerId: string }) {
   }
 
   useEffect(() => {
-    //if the user doesn't click the button, we dont do nothing
     if (!hasSearched) return
 
     let active = true
@@ -69,7 +68,7 @@ export function CustomerBopaMatches({ customerId }: { customerId: string }) {
     return () => {
       active = false
     }
-  }, [customerId, offset, hasSearched]) //it executes at change offset or active hasSearched
+  }, [customerId, offset, hasSearched])
 
   const pageCount = Math.ceil(total / PAGE_SIZE)
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
@@ -96,7 +95,7 @@ export function CustomerBopaMatches({ customerId }: { customerId: string }) {
       </div>
 
       <div className="mt-4 rounded-lg border border-slate-200 bg-white w-full">
-        {/*Initial state: User not requested the searching */}
+
         {!hasSearched ? (
           <div className="px-6 py-12 text-center text-sm text-slate-500">
             <Search className="mx-auto h-8 w-8 text-slate-400 stroke-[1.5]" />
@@ -122,9 +121,7 @@ export function CustomerBopaMatches({ customerId }: { customerId: string }) {
           </div>
         ) : documents.length === 0 ? (
           <div className="px-6 py-12 text-center text-sm text-slate-500">
-            {total === 0
-              ? "No se han encontrado documentos BOPA coincidentes."
-              : "Cargando documentos..."}
+            "No se han encontrado documentos BOPA coincidentes."
           </div>
         ) : (
           <>

@@ -373,7 +373,7 @@ class BopaService:
         if not terms:
             return DocumentSearchPage(items=[], total=0)
 
-        #Setup the base query with joined load
+        # Setup the base query with joined load
         query = (
             self.db.query(BopaDocument)
             .join(BopaDocument.bulletin)
