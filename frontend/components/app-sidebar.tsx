@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { LogOut } from "lucide-react"
@@ -7,6 +8,7 @@ import { LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { navGroups, getInitials } from "@/lib/navigation"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { alertsApi } from "@/features/alerts/api"
 
 interface AppSidebarUser {
   name?: string | null
@@ -19,8 +21,41 @@ interface AppSidebarProps {
   onLogout: () => void
 }
 
+// How often the unread-alert badge refreshes so it updates without a reload.
+const UNREAD_POLL_MS = 30_000
+
 export function AppSidebar({ user, onLogout }: AppSidebarProps) {
   const pathname = usePathname()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  // Poll the unread-alert count so the "Alertas" badge stays live. Also refetch
+  // on navigation (the Alertas page mutates statuses), so acting on an alert
+  // updates the badge without waiting for the next poll.
+  useEffect(() => {
+    let active = true
+
+    const loadCount = async () => {
+      try {
+        const result = await alertsApi.getUnreadCount()
+        if (active && result.success && result.data) {
+          setUnreadCount(result.data.count)
+        }
+      } catch (error) {
+        console.error("[Strategos] Load unread alert count error:", error)
+      }
+    }
+
+    loadCount()
+    const interval = setInterval(loadCount, UNREAD_POLL_MS)
+    // The Alertas page dispatches this after mutating a status, so the badge
+    // updates immediately rather than waiting for the next poll.
+    window.addEventListener("alerts:changed", loadCount)
+    return () => {
+      active = false
+      clearInterval(interval)
+      window.removeEventListener("alerts:changed", loadCount)
+    }
+  }, [pathname])
 
   return (
     <aside className="flex h-screen w-[260px] shrink-0 flex-col bg-[#0e1729] text-slate-200">
@@ -68,7 +103,15 @@ export function AppSidebar({ user, onLogout }: AppSidebarProps) {
                           isActive ? "text-[#caa53d]" : "text-slate-400",
                         )}
                       />
-                      {item.label}
+                      <span className="flex-1">{item.label}</span>
+                      {item.href === "/alertas" && unreadCount > 0 && (
+                        <span
+                          className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-semibold text-white"
+                          aria-label={`${unreadCount} alertas sin leer`}
+                        >
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 )

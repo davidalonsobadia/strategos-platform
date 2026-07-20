@@ -6,6 +6,7 @@ import {
   Clock,
   Newspaper,
   Settings,
+  Bell,
   type LucideIcon,
 } from "lucide-react"
 
@@ -38,6 +39,7 @@ export const navGroups: NavGroup[] = [
       { label: "Obligaciones", href: "/obligaciones", icon: Clock },
       { label: "BOPA", href: "/bopa", icon: Newspaper },
       { label: "Usuarios", href: "/usuarios", icon: Settings },
+      { label: "Alertas", href: "/alertas", icon: Bell },
     ],
   },
 ]

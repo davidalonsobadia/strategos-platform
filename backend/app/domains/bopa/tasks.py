@@ -3,6 +3,7 @@ from app import logger
 from app.celery_app import celery
 from app.core.dependencies import get_bopa_client, get_business_central_client
 from app.db.session import SessionLocal
+from app.domains.alerts.service import AlertsService
 
 from .models import BopaAnalysisLog, BopaBulletin, BopaDocument, BopaMatch
 from .service import BopaService
@@ -106,9 +107,15 @@ def analyze_bopa_matches():
 
                 matches_to_insert.extend(doc_matches.values())
 
-            # Save matches to DB in bulk
+            # Save matches and raise one alert per match. We add + flush (rather
+            # than bulk_save_objects) so each match gets its ``id`` assigned,
+            # which AlertsService.create_for_match needs for the alert's FK.
             if matches_to_insert:
-                db.bulk_save_objects(matches_to_insert)
+                alerts_service = AlertsService(db)
+                for match in matches_to_insert:
+                    db.add(match)
+                    db.flush()
+                    alerts_service.create_for_match(match)
                 total_matches += len(matches_to_insert)
 
             # Mark bulletin as analyzed
