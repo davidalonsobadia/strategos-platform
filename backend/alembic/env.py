@@ -24,6 +24,7 @@ if database_url is None:
 config.set_main_option("sqlalchemy.url", database_url)
 
 # Import all models so Alembic can detect them
+import app.domains.alerts.models
 import app.domains.auth.models
 import app.domains.api_clients.models
 import app.domains.bopa.models

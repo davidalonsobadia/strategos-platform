@@ -45,6 +45,12 @@ export const config = {
           documentFilters: "/api/v1/bopa/documents/filters",
           documentById: (id: string) => `/api/v1/bopa/documents/${id}`,
         },
+        alerts: {
+          base: "/api/v1/alerts",
+          unreadCount: "/api/v1/alerts/unread-count",
+          markAllRead: "/api/v1/alerts/mark-all-read",
+          byId: (id: string) => `/api/v1/alerts/${id}`,
+        },
       },
       // Frontend API routes (proxy to backend)
       auth: {
@@ -77,6 +83,11 @@ export const config = {
       bopa: {
         documents: "/api/bopa/documents",
         documentFilters: "/api/bopa/documents/filters",
+      },
+      alerts: {
+        base: "/api/alerts",
+        unreadCount: "/api/alerts/unread-count",
+        markAllRead: "/api/alerts/mark-all-read",
       },
     },
   },
