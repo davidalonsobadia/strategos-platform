@@ -103,7 +103,7 @@ export function AlertsView() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Alertas</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Coincidencias de clientes detectadas en el BOPA.
+            Notificaciones del BOPA y obligaciones de Business Central.
           </p>
         </div>
         {status === "new" && (

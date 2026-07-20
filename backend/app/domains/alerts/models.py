@@ -36,6 +36,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -65,8 +66,11 @@ class Alert(Base):
     # NULL means the alert is for all users (see module docstring).
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     customer_id = Column(String, nullable=False, index=True)
+    # server_default is quoted SQL (text("'BOPA'")); a bare string would render
+    # as unquoted DEFAULT BOPA, which is invalid for a Postgres enum column when
+    # the schema is built via create_all() rather than the Alembic migration.
     alert_type = Column(
-        Enum(AlertType), nullable=False, server_default=AlertType.BOPA.value
+        Enum(AlertType), nullable=False, server_default=text(f"'{AlertType.BOPA.value}'")
     )
     # BOPA alerts link to a BopaMatch; OBLIGATION alerts leave this NULL.
     bopa_match_id = Column(

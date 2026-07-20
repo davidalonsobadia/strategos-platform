@@ -10,7 +10,7 @@ from datetime import datetime
 
 import pytest
 
-from app.domains.alerts.models import Alert, AlertStatus
+from app.domains.alerts.models import Alert, AlertStatus, AlertType
 from app.domains.alerts.service import AlertsService
 from app.domains.bopa.models import BopaBulletin, BopaDocument, BopaMatch
 
@@ -59,6 +59,7 @@ def _make_alert(db_session, match, status=AlertStatus.NEW):
     alert = Alert(
         customer_id=match.customer_id,
         bopa_match_id=match.id,
+        alert_type=AlertType.BOPA,
         status=status,
     )
     db_session.add(alert)

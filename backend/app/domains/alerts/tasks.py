@@ -54,7 +54,12 @@ def generate_obligation_alerts(reference_date: date | None = None):
         instances = bc_client.get_project_obligations()
         obligations_by_id = {o.id: o for o in bc_client.get_obligations()}
         projects_by_id = {p.id: p for p in bc_client.get_projects()}
-        customer_names = {c.id: c.name for c in bc_client.get_customers()}
+        # Resolve names only for the customers referenced by these projects.
+        # get_customer_names() is a scoped /customers read; get_customers()
+        # would re-fetch every project company-wide (to compute
+        # active_project_count) — a second full projects round-trip we don't need.
+        customer_ids = [p.customer_id for p in projects_by_id.values()]
+        customer_names = bc_client.get_customer_names(customer_ids)
 
         service = AlertsService(db)
 
