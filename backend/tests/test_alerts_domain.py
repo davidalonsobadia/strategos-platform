@@ -76,10 +76,14 @@ def test_list_alerts_returns_display_fields(client, db_session, bopa_match):
     assert body["total"] == 1
     item = body["items"][0]
     assert item["customer_id"] == "C001"
+    assert item["alert_type"] == "BOPA"
     assert item["status"] == "new"
     assert item["matched_term"] == "Acme SL"
     assert item["document_title"] == "Acme SL mencionada en el BOPA"
     assert item["source_url"] == "https://example.com/doc-1"
+    # Unified display fields mirror the BOPA-specific ones.
+    assert item["title"] == "Acme SL"
+    assert item["message"] == "Acme SL mencionada en el BOPA"
 
 
 def test_list_alerts_filters_by_status(client, db_session, bopa_match):
