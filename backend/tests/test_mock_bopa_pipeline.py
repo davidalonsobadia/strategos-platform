@@ -44,7 +44,7 @@ EXPECTED_OBLIGATION_IDS = {"pobl-002", "pobl-004", "pobl-006"}
 
 
 @pytest.fixture
-def _wire_pipeline(db_session, monkeypatch):
+def wire_pipeline(db_session, monkeypatch):
     """Point both task bodies' session factory and BC client at the test fixtures."""
     monkeypatch.setattr(bopa_tasks, "SessionLocal", lambda: db_session)
     monkeypatch.setattr(alerts_tasks, "SessionLocal", lambda: db_session)
@@ -58,38 +58,38 @@ def _wire_pipeline(db_session, monkeypatch):
 
 
 @pytest.mark.integration
-def test_pipeline_persists_documents(_wire_pipeline):
+def test_pipeline_persists_documents(wire_pipeline):
     """Stage 1 persists the synthetic bulletin's documents."""
-    result = run_mock_bopa_pipeline(_wire_pipeline, reference_date=REFERENCE_DATE)
+    result = run_mock_bopa_pipeline(wire_pipeline, reference_date=REFERENCE_DATE)
 
     assert result.bulletins_synced == 1
     assert result.documents_synced == 8
-    assert _wire_pipeline.query(BopaDocument).count() == 8
+    assert wire_pipeline.query(BopaDocument).count() == 8
 
 
 @pytest.mark.integration
-def test_pipeline_search_finds_synthetic_document(_wire_pipeline):
+def test_pipeline_search_finds_synthetic_document(wire_pipeline):
     """The persisted synthetic content is searchable through the real search path."""
-    run_mock_bopa_pipeline(_wire_pipeline, reference_date=REFERENCE_DATE)
+    run_mock_bopa_pipeline(wire_pipeline, reference_date=REFERENCE_DATE)
 
     demo_client = MockBopaClient(
         bulletins_fixture=DEMO_BULLETINS, documents_fixture=DEMO_DOCUMENTS
     )
-    page = BopaService(_wire_pipeline, demo_client).search_documents(q="Pirineus")
+    page = BopaService(wire_pipeline, demo_client).search_documents(q="Pirineus")
 
     assert page.total == 1
     assert "Immobiliària Pirineus SL" in page.items[0].title
 
 
 @pytest.mark.integration
-def test_pipeline_creates_bopa_matches_and_alerts(_wire_pipeline):
+def test_pipeline_creates_bopa_matches_and_alerts(wire_pipeline):
     """Stage 2 yields exactly six matches (four customer, two project) + alerts."""
-    result = run_mock_bopa_pipeline(_wire_pipeline, reference_date=REFERENCE_DATE)
+    result = run_mock_bopa_pipeline(wire_pipeline, reference_date=REFERENCE_DATE)
 
     assert result.bopa_matches == 6
     assert result.bopa_alerts == 6
 
-    matches = _wire_pipeline.query(BopaMatch).all()
+    matches = wire_pipeline.query(BopaMatch).all()
     matched_terms = {m.matched_term for m in matches}
     assert matched_terms == {
         "Immobiliària Pirineus SL",
@@ -115,7 +115,7 @@ def test_pipeline_creates_bopa_matches_and_alerts(_wire_pipeline):
     assert by_term["Gestió comunitat de propietaris"].project_id == "proj-006"
 
     # BOPA alert payload resolves display fields from the linked match/document.
-    page = AlertsService(_wire_pipeline).list_alerts()
+    page = AlertsService(wire_pipeline).list_alerts()
     bopa_alerts = [a for a in page.items if a.alert_type is AlertType.BOPA]
     assert len(bopa_alerts) == 6
     for alert in bopa_alerts:
@@ -125,14 +125,14 @@ def test_pipeline_creates_bopa_matches_and_alerts(_wire_pipeline):
 
 
 @pytest.mark.integration
-def test_pipeline_creates_obligation_alerts(_wire_pipeline):
+def test_pipeline_creates_obligation_alerts(wire_pipeline):
     """Stage 3 turns due BC obligations into Obligation alerts with a payload."""
-    result = run_mock_bopa_pipeline(_wire_pipeline, reference_date=REFERENCE_DATE)
+    result = run_mock_bopa_pipeline(wire_pipeline, reference_date=REFERENCE_DATE)
 
     assert result.obligation_alerts == len(EXPECTED_OBLIGATION_IDS)
 
     obligation_alerts = (
-        _wire_pipeline.query(Alert)
+        wire_pipeline.query(Alert)
         .filter(Alert.alert_type == AlertType.OBLIGATION)
         .all()
     )
@@ -142,10 +142,10 @@ def test_pipeline_creates_obligation_alerts(_wire_pipeline):
 
 
 @pytest.mark.integration
-def test_pipeline_is_idempotent(_wire_pipeline):
+def test_pipeline_is_idempotent(wire_pipeline):
     """Re-running the pipeline does not duplicate matches or alerts."""
-    run_mock_bopa_pipeline(_wire_pipeline, reference_date=REFERENCE_DATE)
-    second = run_mock_bopa_pipeline(_wire_pipeline, reference_date=REFERENCE_DATE)
+    run_mock_bopa_pipeline(wire_pipeline, reference_date=REFERENCE_DATE)
+    second = run_mock_bopa_pipeline(wire_pipeline, reference_date=REFERENCE_DATE)
 
     assert second.bopa_matches == 6
     assert second.bopa_alerts == 6
@@ -156,14 +156,14 @@ def test_pipeline_is_idempotent(_wire_pipeline):
 
 
 @pytest.mark.integration
-def test_pipeline_demo_states_populate_all_tabs(_wire_pipeline):
+def test_pipeline_demo_states_populate_all_tabs(wire_pipeline):
     """demo_states=True moves a fixed subset to VIEWED/DISCARDED, idempotently."""
     run_mock_bopa_pipeline(
-        _wire_pipeline, reference_date=REFERENCE_DATE, demo_states=True
+        wire_pipeline, reference_date=REFERENCE_DATE, demo_states=True
     )
 
     def counts_by_status():
-        rows = _wire_pipeline.query(Alert).all()
+        rows = wire_pipeline.query(Alert).all()
         return {
             status: sum(1 for a in rows if a.status is status)
             for status in AlertStatus
@@ -177,13 +177,13 @@ def test_pipeline_demo_states_populate_all_tabs(_wire_pipeline):
 
     # The targeted alerts are the expected ones (by stable key).
     fontaneria = (
-        _wire_pipeline.query(Alert)
+        wire_pipeline.query(Alert)
         .filter(Alert.alert_type == AlertType.BOPA, Alert.customer_id == "cust-001")
         .one()
     )
     assert fontaneria.status is AlertStatus.VIEWED
     discarded = (
-        _wire_pipeline.query(Alert)
+        wire_pipeline.query(Alert)
         .filter(Alert.bc_obligation_id == "pobl-006")
         .one()
     )
@@ -191,6 +191,6 @@ def test_pipeline_demo_states_populate_all_tabs(_wire_pipeline):
 
     # Re-running with demo_states keeps the same distribution (idempotent).
     run_mock_bopa_pipeline(
-        _wire_pipeline, reference_date=REFERENCE_DATE, demo_states=True
+        wire_pipeline, reference_date=REFERENCE_DATE, demo_states=True
     )
     assert counts_by_status() == first

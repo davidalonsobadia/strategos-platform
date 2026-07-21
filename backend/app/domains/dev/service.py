@@ -28,6 +28,7 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
+from app import logger
 from app.domains.alerts.models import Alert, AlertStatus, AlertType
 from app.domains.alerts.tasks import generate_obligation_alerts
 from app.domains.bopa.models import BopaMatch
@@ -100,16 +101,37 @@ def _apply_demo_states(db: Session) -> None:
     Targets specific alerts by stable business key (customer / obligation id), not
     by row order, so the assignment is deterministic and re-running is idempotent.
     Leaves every other alert in its NEW state. See :func:`run_mock_bopa_pipeline`.
+
+    The keys below are coupled to the demo BOPA fixture and the mock BC obligation
+    fixture; ``.update()`` returns the number of rows matched, so a zero means the
+    fixtures drifted (a target alert was not generated). That is logged as a
+    warning rather than failing, since this is a best-effort local seeding aid.
     """
     # Vistas: one BOPA/Client alert (Fontaneria Puigcerdà SL) + one obligation.
-    db.query(Alert).filter(
+    viewed_bopa = db.query(Alert).filter(
         Alert.alert_type == AlertType.BOPA, Alert.customer_id == "cust-001"
     ).update({Alert.status: AlertStatus.VIEWED}, synchronize_session=False)
-    db.query(Alert).filter(Alert.bc_obligation_id == "pobl-002").update(
-        {Alert.status: AlertStatus.VIEWED}, synchronize_session=False
-    )
+    viewed_obligation = db.query(Alert).filter(
+        Alert.bc_obligation_id == "pobl-002"
+    ).update({Alert.status: AlertStatus.VIEWED}, synchronize_session=False)
     # Descartadas: one obligation alert.
-    db.query(Alert).filter(Alert.bc_obligation_id == "pobl-006").update(
-        {Alert.status: AlertStatus.DISCARDED}, synchronize_session=False
-    )
+    discarded_obligation = db.query(Alert).filter(
+        Alert.bc_obligation_id == "pobl-006"
+    ).update({Alert.status: AlertStatus.DISCARDED}, synchronize_session=False)
     db.commit()
+
+    logger.debug(
+        "demo_states applied: VIEWED bopa=%s obligation=%s, DISCARDED obligation=%s",
+        viewed_bopa,
+        viewed_obligation,
+        discarded_obligation,
+    )
+    if not (viewed_bopa and viewed_obligation and discarded_obligation):
+        logger.warning(
+            "demo_states: some target alerts were not found (bopa cust-001=%s, "
+            "obligation pobl-002=%s, obligation pobl-006=%s) — demo fixtures may "
+            "have drifted",
+            viewed_bopa,
+            viewed_obligation,
+            discarded_obligation,
+        )
