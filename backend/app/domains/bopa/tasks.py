@@ -1,4 +1,6 @@
 """Celery tasks for the BOPA domain."""
+from sqlalchemy.exc import IntegrityError
+
 from app import logger
 from app.celery_app import celery
 from app.core.dependencies import get_bopa_client, get_business_central_client
@@ -8,6 +10,10 @@ from app.domains.customers.service import CustomersService
 
 from .models import BopaAnalysisLog, BopaBulletin, BopaDocument, BopaMatch
 from .service import BopaService
+
+# The customer-scoped scan loads documents in batches of this size so a large
+# corpus never pulls every unbounded ``html_content`` body into memory at once.
+_SCAN_BATCH_SIZE = 500
 
 
 def _searchable_text(doc: BopaDocument) -> str:
@@ -150,7 +156,7 @@ def analyze_bopa_matches() -> int:
     except Exception as e:
         db.rollback()
         logger.error(f"BOPA analysis failed: {str(e)}")
-        raise e
+        raise
     finally:
         db.close()
 
@@ -199,30 +205,53 @@ def analyze_bopa_matches_for_customer(customer_id: str) -> int:
         alerts_service = AlertsService(db)
         total_matches = 0
 
-        for doc in db.query(BopaDocument).all():
-            if doc.id in already_matched:
-                continue
+        # Stream the document ids first (cheap — just integers), drop the ones
+        # already matched for this customer, and load the full rows in batches.
+        # This keeps peak memory bounded even for a corpus of tens of thousands
+        # of documents with large ``html_content`` bodies.
+        pending_ids = [
+            row[0]
+            for row in db.query(BopaDocument.id)
+            if row[0] not in already_matched
+        ]
 
-            # Name + project matches (CustomerResponse exposes .id/.name, so it
-            # slots into _match_document exactly like a BCCustomer).
-            doc_matches = _match_document(doc, [customer], customer_projects)
+        for start in range(0, len(pending_ids), _SCAN_BATCH_SIZE):
+            batch_ids = pending_ids[start : start + _SCAN_BATCH_SIZE]
+            documents = db.query(BopaDocument).filter(
+                BopaDocument.id.in_(batch_ids)
+            )
 
-            # NIF fallback: only when nothing else matched this document, to avoid
-            # a second row for the same (customer, document) key.
-            if not doc_matches and nif and nif.lower() in _searchable_text(doc):
-                doc_matches = [
-                    BopaMatch(
-                        customer_id=customer_id,
-                        document_id=doc.id,
-                        matched_term=nif,
-                    )
-                ]
+            for doc in documents:
+                # Name + project matches (CustomerResponse exposes .id/.name, so
+                # it slots into _match_document exactly like a BCCustomer).
+                doc_matches = _match_document(doc, [customer], customer_projects)
 
-            for match in doc_matches:
-                db.add(match)
-                db.flush()
-                alerts_service.create_for_match(match)
-                total_matches += 1
+                # NIF fallback: only when nothing else matched this document, to
+                # avoid a second row for the same (customer, document) key.
+                if not doc_matches and nif and nif.lower() in _searchable_text(doc):
+                    doc_matches = [
+                        BopaMatch(
+                            customer_id=customer_id,
+                            document_id=doc.id,
+                            matched_term=nif,
+                        )
+                    ]
+
+                for match in doc_matches:
+                    # A concurrent scoped scan for the same customer may have
+                    # inserted this (customer, document) pair between our
+                    # ``already_matched`` snapshot and now. Guard each insert in a
+                    # savepoint so a duplicate is skipped (another request already
+                    # created it) instead of failing the whole request with an
+                    # opaque 500 on uq_bopa_match_customer_doc.
+                    try:
+                        with db.begin_nested():
+                            db.add(match)
+                            db.flush()
+                    except IntegrityError:
+                        continue
+                    alerts_service.create_for_match(match)
+                    total_matches += 1
 
         db.commit()
         logger.info(
@@ -233,6 +262,6 @@ def analyze_bopa_matches_for_customer(customer_id: str) -> int:
     except Exception as e:
         db.rollback()
         logger.error(f"BOPA customer scan failed for {customer_id}: {str(e)}")
-        raise e
+        raise
     finally:
         db.close()

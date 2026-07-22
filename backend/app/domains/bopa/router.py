@@ -175,6 +175,12 @@ def scan_bopa(
         matches_created = analyze_bopa_matches_for_customer(customer_id)
     else:
         matches_created = analyze_bopa_matches()
+        # Note: analyze_bopa_matches commits its matches per bulletin. If
+        # generate_obligation_alerts raises here the endpoint returns 500 even
+        # though the matches were already persisted, so a retry re-runs a global
+        # scan that only re-adds obligation alerts (matches are idempotent). This
+        # pre-existing quirk is confined to the global path; the scoped path above
+        # raises its BOPA-match alerts inline and never calls this job.
         generate_obligation_alerts()
 
     return ScanResult(
