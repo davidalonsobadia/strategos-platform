@@ -5,6 +5,9 @@ import { Loader2 } from "lucide-react"
 
 import { authApi } from "@/features/auth/api"
 import { dashboardApi } from "@/features/dashboard/api"
+import { FacturacionPorCliente } from "@/features/dashboard/facturacion-por-cliente"
+import { FacturacionPorProyecto } from "@/features/dashboard/facturacion-por-proyecto"
+import { formatEuro } from "@/features/dashboard/format"
 import { KpiTile } from "@/features/dashboard/kpi-tile"
 import { MisTareas } from "@/features/dashboard/mis-tareas"
 import { ProximasObligaciones } from "@/features/dashboard/proximas-obligaciones"
@@ -120,6 +123,25 @@ export default function DashboardPage() {
             <div>
               <MisTareas tasks={summary.misTareasDeHoy} />
             </div>
+          </div>
+
+          {/* Financial section, sourced live from Business Central. */}
+          <div className="mt-6 grid gap-5 sm:grid-cols-2">
+            <KpiTile
+              title="Facturación neta"
+              value={formatEuro(summary.facturacionNeta.amount)}
+              sublabel="facturas menos rectificativas"
+            />
+            <KpiTile
+              title="Costes"
+              value={formatEuro(summary.costes.amount)}
+              sublabel="coste de uso de proyectos"
+            />
+          </div>
+
+          <div className="mt-6 grid gap-5 lg:grid-cols-2">
+            <FacturacionPorCliente rows={summary.facturacionPorCliente} />
+            <FacturacionPorProyecto rows={summary.facturacionPorProyecto} />
           </div>
         </>
       )}

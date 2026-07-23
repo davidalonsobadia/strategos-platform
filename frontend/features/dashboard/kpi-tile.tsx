@@ -4,8 +4,9 @@ import { cn } from "@/lib/utils"
 interface KpiTileProps {
   // Small label above the number (e.g. "Proyectos activos").
   title: string
-  // The headline number.
-  value: number
+  // The headline figure — a raw count, or a pre-formatted string (e.g. a euro
+  // amount) for the financial tiles.
+  value: number | string
   // Muted sublabel below the number (e.g. "de 12 totales").
   sublabel: string
   // Amber sublabel for the "Obligaciones próximas" tile in dashboard.png.

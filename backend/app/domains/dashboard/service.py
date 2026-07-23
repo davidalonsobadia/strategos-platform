@@ -17,6 +17,7 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session
 
 from app.domains.auth.models import User
+from app.domains.billing.service import BillingService
 from app.domains.obligations.schemas import DerivedObligationStatus
 from app.domains.obligations.service import (
     DEFAULT_UPCOMING_WINDOW_DAYS,
@@ -34,8 +35,12 @@ from .schemas import (
     ActiveTotalKpi,
     CountKpi,
     DashboardSummary,
+    MoneyKpi,
     PendingTotalKpi,
 )
+
+# How many rows of each financial breakdown the dashboard tables show.
+_FINANCIAL_TABLE_LIMIT = 5
 
 
 class DashboardService:
@@ -45,6 +50,7 @@ class DashboardService:
         self.bc_client = bc_client
         self.obligations = ObligationsService(db, bc_client)
         self.tasks = TasksService(db, bc_client)
+        self.billing = BillingService(db, bc_client)
 
     def build_summary(
         self,
@@ -120,6 +126,18 @@ class DashboardService:
             key=lambda t: t.due_date,
         )
 
+        # Financial section, aggregated live from Business Central. Totals are
+        # the sum across every row (invoices minus credit memos for billing,
+        # usage cost for costes); the tables show only the top rows.
+        billing_por_cliente = self.billing.billing_by_customer()
+        billing_por_proyecto = self.billing.billing_by_project()
+        facturacion_neta = MoneyKpi(
+            amount=round(sum(c.net_billed for c in billing_por_cliente), 2)
+        )
+        costes = MoneyKpi(
+            amount=round(sum(p.cost for p in billing_por_proyecto), 2)
+        )
+
         return DashboardSummary(
             proyectos_activos=proyectos_activos,
             obligaciones_proximas=obligaciones_proximas,
@@ -127,4 +145,8 @@ class DashboardService:
             clientes_activos=clientes_activos,
             proximas_obligaciones=proximas_obligaciones,
             mis_tareas_de_hoy=mis_tareas_de_hoy,
+            facturacion_neta=facturacion_neta,
+            costes=costes,
+            facturacion_por_cliente=billing_por_cliente[:_FINANCIAL_TABLE_LIMIT],
+            facturacion_por_proyecto=billing_por_proyecto[:_FINANCIAL_TABLE_LIMIT],
         )

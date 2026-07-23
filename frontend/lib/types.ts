@@ -213,8 +213,31 @@ export interface CountKpi {
   count: number
 }
 
+// A KPI tile carrying a monetary total in local currency (EUR).
+export interface MoneyKpi {
+  amount: number
+}
+
+// Net billing for one customer (invoices minus credit memos). snake_case ==
+// camelCase here, so this shape is shared by the API response and the frontend.
+export interface CustomerBilling {
+  customer_id: string
+  customer_name: string
+  net_billed: number
+}
+
+// Billing, usage cost and logged hours for one project.
+export interface ProjectBilling {
+  project_id: string
+  project_name: string
+  billed: number
+  cost: number
+  hours: number
+}
+
 // Backend API response type (from GET /api/v1/dashboard/summary). The two lists
-// reuse the obligations / tasks response shapes.
+// reuse the obligations / tasks response shapes; the financial section reuses
+// the billing domain's shapes.
 export interface DashboardSummaryResponse {
   proyectos_activos: ActiveTotalKpi
   obligaciones_proximas: CountKpi
@@ -222,6 +245,10 @@ export interface DashboardSummaryResponse {
   clientes_activos: ActiveTotalKpi
   proximas_obligaciones: ProjectObligationResponse[]
   mis_tareas_de_hoy: TaskResponse[]
+  facturacion_neta: MoneyKpi
+  costes: MoneyKpi
+  facturacion_por_cliente: CustomerBilling[]
+  facturacion_por_proyecto: ProjectBilling[]
 }
 
 // Frontend type (camelCase for easier use in components)
@@ -232,6 +259,10 @@ export interface DashboardSummary {
   clientesActivos: ActiveTotalKpi
   proximasObligaciones: ProjectObligation[]
   misTareasDeHoy: Task[]
+  facturacionNeta: MoneyKpi
+  costes: MoneyKpi
+  facturacionPorCliente: CustomerBilling[]
+  facturacionPorProyecto: ProjectBilling[]
 }
 
 export interface AuthResponse {
@@ -345,5 +376,9 @@ export function transformDashboardSummaryResponse(
       transformProjectObligationResponse,
     ),
     misTareasDeHoy: backendSummary.mis_tareas_de_hoy.map(transformTaskResponse),
+    facturacionNeta: backendSummary.facturacion_neta,
+    costes: backendSummary.costes,
+    facturacionPorCliente: backendSummary.facturacion_por_cliente,
+    facturacionPorProyecto: backendSummary.facturacion_por_proyecto,
   }
 }

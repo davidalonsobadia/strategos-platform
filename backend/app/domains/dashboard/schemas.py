@@ -13,6 +13,10 @@ activos / Obligaciones próximas / Tareas pendientes / Clientes activos, plus th
 
 from pydantic import BaseModel
 
+from app.domains.billing.schemas import (
+    CustomerBillingResponse,
+    ProjectBillingResponse,
+)
 from app.domains.obligations.schemas import ProjectObligationResponse
 from app.domains.tasks.schemas import TaskResponse
 
@@ -37,13 +41,25 @@ class CountKpi(BaseModel):
     count: int
 
 
+class MoneyKpi(BaseModel):
+    """A KPI tile carrying a monetary total in local currency (EUR)."""
+
+    amount: float
+
+
 class DashboardSummary(BaseModel):
     """The composed landing-screen summary for the current user.
 
-    The four KPI tiles are firm-wide; ``mis_tareas_de_hoy`` is scoped to the
-    current user (see ``service.DashboardService``). ``proximas_obligaciones``
+    The four count KPI tiles are firm-wide; ``mis_tareas_de_hoy`` is scoped to
+    the current user (see ``service.DashboardService``). ``proximas_obligaciones``
     carries the upcoming/overdue obligation instances across all projects,
     ordered by due date.
+
+    The financial section is aggregated live from Business Central (see the
+    billing domain): ``facturacion_neta`` is firm-wide net billing (invoices
+    minus credit memos) and ``costes`` the firm-wide usage cost;
+    ``facturacion_por_cliente`` and ``facturacion_por_proyecto`` carry the
+    top rows of each breakdown for the dashboard tables.
     """
 
     proyectos_activos: ActiveTotalKpi
@@ -52,3 +68,7 @@ class DashboardSummary(BaseModel):
     clientes_activos: ActiveTotalKpi
     proximas_obligaciones: list[ProjectObligationResponse]
     mis_tareas_de_hoy: list[TaskResponse]
+    facturacion_neta: MoneyKpi
+    costes: MoneyKpi
+    facturacion_por_cliente: list[CustomerBillingResponse]
+    facturacion_por_proyecto: list[ProjectBillingResponse]

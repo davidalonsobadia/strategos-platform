@@ -87,7 +87,7 @@ def frozen_bc_user_client(db_session):
 
 @pytest.mark.integration
 def test_summary_returns_all_sections(frozen_client):
-    """The summary exposes the four KPI tiles and the two list sections."""
+    """The summary exposes the count KPIs, the two lists and the financial section."""
     resp = frozen_client.get(SUMMARY_URL)
     assert resp.status_code == 200
     body = resp.json()
@@ -98,11 +98,59 @@ def test_summary_returns_all_sections(frozen_client):
         "clientes_activos",
         "proximas_obligaciones",
         "mis_tareas_de_hoy",
+        "facturacion_neta",
+        "costes",
+        "facturacion_por_cliente",
+        "facturacion_por_proyecto",
     }
     assert set(body["proyectos_activos"]) == {"active", "total"}
     assert set(body["clientes_activos"]) == {"active", "total"}
     assert set(body["tareas_pendientes"]) == {"pending", "total"}
     assert set(body["obligaciones_proximas"]) == {"count"}
+    assert set(body["facturacion_neta"]) == {"amount"}
+    assert set(body["costes"]) == {"amount"}
+
+
+@pytest.mark.integration
+def test_financial_section_aggregates_billing_and_costs(frozen_client):
+    """The financial section carries firm totals plus the top breakdown rows.
+
+    Totals come from the billing fixtures: net billing = invoices − credit memos
+    = 7000.00 firm-wide; usage cost from the job ledger = 3250.00. The tables are
+    capped at five rows and ordered by amount desc.
+    """
+    body = frozen_client.get(SUMMARY_URL).json()
+
+    assert body["facturacion_neta"] == {"amount": 7000.0}
+    assert body["costes"] == {"amount": 3250.0}
+
+    por_cliente = body["facturacion_por_cliente"]
+    assert len(por_cliente) <= 5
+    assert set(por_cliente[0]) == {"customer_id", "customer_name", "net_billed"}
+    # cust-001 tops the list: 1500 + 2000 invoiced − 200 credited = 3300.
+    assert por_cliente[0]["customer_id"] == "cust-001"
+    assert por_cliente[0]["net_billed"] == 3300.0
+    amounts = [c["net_billed"] for c in por_cliente]
+    assert amounts == sorted(amounts, reverse=True)
+
+    por_proyecto = body["facturacion_por_proyecto"]
+    assert len(por_proyecto) <= 5
+    assert set(por_proyecto[0]) == {
+        "project_id",
+        "project_name",
+        "billed",
+        "cost",
+        "hours",
+    }
+    # proj-002: billed 2000, usage cost 900, 16 hours logged.
+    top = next(p for p in por_proyecto if p["project_id"] == "proj-002")
+    assert top == {
+        "project_id": "proj-002",
+        "project_name": top["project_name"],
+        "billed": 2000.0,
+        "cost": 900.0,
+        "hours": 16.0,
+    }
 
 
 # --------------------------------------------------------------------------- #
